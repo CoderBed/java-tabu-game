@@ -1,10 +1,14 @@
 package tr.com.bedirhan.tabu;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
+import java.awt.Toolkit;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.ArrayList;
@@ -37,8 +41,10 @@ public class Main {
             JLabel scoreALabel = new JLabel("Skor(A): 0");
             JLabel scoreBLabel = new JLabel("Skor(B): 0");
             JLabel timeLabel = new JLabel("Süre: 60");
+            Color normalTimeColor = timeLabel.getForeground();
             JLabel passLabel = new JLabel("Pas: 0/3");
             JLabel roundLabel = new JLabel("Tur: 1/6");
+            JLabel roundStatsLabel = new JLabel("Bu Tur: ✓ 0 | ␣ 0 | ✕ 0");
 
             JLabel durationLabel = new JLabel("Tur Süresi:");
             Integer[] durationOptions = {60, 90, 120, 180};
@@ -61,15 +67,55 @@ public class Main {
 
             JLabel infoLabel = new JLabel(" ");
             infoLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+            JToggleButton darkModeToggle = new JToggleButton("🌙 Dark"); // listener'ı aşağıda (applyTheme sonrası) eklenecek
 
-            Font topFont = new Font("Arial", Font.BOLD, 18);
+            // Takım isimleri + renk seçimi (oyun başlamadan)
+            JLabel teamANameLabel = new JLabel("Takım A Adı:");
+            JTextField teamANameField = new JTextField("Takım A", 8);
+
+            JLabel teamBNameLabel = new JLabel("Takım B Adı:");
+            JTextField teamBNameField = new JTextField("Takım B", 8);
+
+            JButton teamAColorButton = new JButton("A Renk");
+            JButton teamBColorButton = new JButton("B Renk");
+
+            // Takım renkleri (seçilebilir)
+            final Color[] teamAColor = { new Color(76, 175, 80) };   // varsayılan yeşil
+            final Color[] teamBColor = { new Color(33, 150, 243) };  // varsayılan mavi
+
+            // Takım isimleri (seçilebilir)
+            final String[] teamAName = { "Takım A" };
+            final String[] teamBName = { "Takım B" };
+
+            // Oyun başladı mı? (bazı UI aksiyonları oyun başlamadan çalışmasın)
+            final boolean[] started = {false};
+            final boolean[] darkMode = {false};
+
+            // Skor etiketlerini "badge" gibi göster
+            Runnable applyTeamBadgeStyles = () -> {
+                Color scoreABg = lighten(teamAColor[0], 0.72f);
+                Color scoreBBg = lighten(teamBColor[0], 0.75f);
+                styleBadgeLabel(scoreALabel, scoreABg, darken(teamAColor[0], 0.35f));
+                styleBadgeLabel(scoreBLabel, scoreBBg, darken(teamBColor[0], 0.35f));
+
+                // Takım etiketi badge stili (aktif takıma göre updateTeamColors içinde güncellenecek)
+                styleBadgeLabel(teamLabel, lighten(teamAColor[0], 0.72f), darken(teamAColor[0], 0.35f));
+            };
+
+            applyTeamBadgeStyles.run();
+
+            Font topFont = new Font("Arial", Font.BOLD, 19);
             for (JComponent c : new JComponent[]{
                     teamLabel, scoreALabel, scoreBLabel, timeLabel,
-                    passLabel, roundLabel,
+                    passLabel, roundLabel, roundStatsLabel,
                     durationLabel, durationBox,
                     roundsLabel, roundsBox,
                     passLimitLabel, passLimitBox,
                     tabooPenaltyLabel, tabooPenaltyBox,
+                    teamANameLabel, teamANameField,
+                    teamBNameLabel, teamBNameField,
+                    teamAColorButton, teamBColorButton,
+                    darkModeToggle,
                     startButton
             }) c.setFont(topFont);
 
@@ -79,6 +125,7 @@ public class Main {
             topPanel.add(timeLabel);
             topPanel.add(passLabel);
             topPanel.add(roundLabel);
+            topPanel.add(roundStatsLabel);
             topPanel.add(durationLabel);
             topPanel.add(durationBox);
 
@@ -91,7 +138,15 @@ public class Main {
             topPanel.add(tabooPenaltyLabel);
             topPanel.add(tabooPenaltyBox);
 
-            topPanel.add(startButton);
+            topPanel.add(teamANameLabel);
+            topPanel.add(teamANameField);
+            topPanel.add(teamAColorButton);
+
+            topPanel.add(teamBNameLabel);
+            topPanel.add(teamBNameField);
+            topPanel.add(teamBColorButton);
+
+            // BAŞLAT butonunu üst panelden kaldırdık
             topPanel.add(infoLabel);
 
             // =========================
@@ -101,19 +156,21 @@ public class Main {
             centerPanel.setBackground(Color.WHITE);
             centerPanel.setLayout(new OverlayLayout(centerPanel)); // ✅ tek yerde set
 
-            JPanel cardPanel = new JPanel();
+            // Kart paneli: yuvarlak köşe + hafif gölge
+            JPanel cardPanel = new RoundedShadowPanel(26, 14);
             cardPanel.setPreferredSize(new Dimension(700, 330));
-            cardPanel.setBorder(BorderFactory.createLineBorder(Color.DARK_GRAY, 3));
             cardPanel.setLayout(new BoxLayout(cardPanel, BoxLayout.Y_AXIS));
             cardPanel.setBackground(Color.WHITE);
 
             JLabel wordLabel = new JLabel("KELİME", SwingConstants.CENTER);
             wordLabel.setFont(new Font("Arial", Font.BOLD, 54));
             wordLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            wordLabel.setForeground(new Color(25, 25, 25));
 
             JLabel tabooList = new JLabel("", SwingConstants.CENTER);
             tabooList.setFont(new Font("Arial", Font.PLAIN, 22));
             tabooList.setAlignmentX(Component.CENTER_ALIGNMENT);
+            tabooList.setForeground(new Color(55, 55, 55));
 
             cardPanel.add(Box.createVerticalStrut(30));
             cardPanel.add(wordLabel);
@@ -178,19 +235,40 @@ public class Main {
             JPanel gameEndButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 18, 10));
             gameEndButtons.setOpaque(false);
 
+            // Beraberlikte kullanıcı seçsin
+            JButton endDrawButton = new JButton("BERABERE BİTSİN");
+            JButton tieBreakButton = new JButton("TIE-BREAK");
+
             JButton replayButton = new JButton("TEKRAR OYNA");
             JButton backToSettingsButton = new JButton("YENİ OYUN");
 
+            // Stil
+            styleColoredButton(endDrawButton, new Color(255, 193, 7), Color.BLACK);      // Sarı
+            styleColoredButton(tieBreakButton, new Color(156, 39, 176), Color.WHITE);   // Mor
             styleColoredButton(replayButton, new Color(76, 175, 80), Color.WHITE);
             styleColoredButton(backToSettingsButton, new Color(33, 150, 243), Color.WHITE);
 
+            endDrawButton.setFont(btnFont);
+            tieBreakButton.setFont(btnFont);
             replayButton.setFont(btnFont);
             backToSettingsButton.setFont(btnFont);
+
+            endDrawButton.setPreferredSize(new Dimension(200, 45));
+            tieBreakButton.setPreferredSize(new Dimension(160, 45));
             replayButton.setPreferredSize(new Dimension(180, 45));
             backToSettingsButton.setPreferredSize(new Dimension(180, 45));
+
+            endDrawButton.setFocusable(false);
+            tieBreakButton.setFocusable(false);
             replayButton.setFocusable(false);
             backToSettingsButton.setFocusable(false);
 
+            // Varsayılan: sadece Replay / Yeni Oyun görünür (beraberlikte karar butonları açılacak)
+            endDrawButton.setVisible(false);
+            tieBreakButton.setVisible(false);
+
+            gameEndButtons.add(endDrawButton);
+            gameEndButtons.add(tieBreakButton);
             gameEndButtons.add(replayButton);
             gameEndButtons.add(backToSettingsButton);
 
@@ -214,9 +292,41 @@ public class Main {
             bottomPanel.setPreferredSize(new Dimension(0, 100));
             bottomPanel.setBackground(Color.LIGHT_GRAY);
 
-            JButton correctButton = new JButton("DOĞRU");
-            JButton passButton = new JButton("PAS");
-            JButton tabooButton = new JButton("TABU");
+            // =========================
+            // THEME (LIGHT / DARK)
+            // =========================
+            Runnable applyTheme = () -> {
+                if (!darkMode[0]) {
+                    // LIGHT MODE
+                    frame.getContentPane().setBackground(Color.WHITE);
+                    topPanel.setBackground(Color.LIGHT_GRAY);
+                    bottomPanel.setBackground(Color.LIGHT_GRAY);
+                    centerPanel.setBackground(Color.WHITE);
+                    cardPanel.setBackground(Color.WHITE);
+                    wordLabel.setForeground(new Color(25, 25, 25));
+                    tabooList.setForeground(new Color(55, 55, 55));
+                    darkModeToggle.setText("🌙 Dark");
+                } else {
+                    // DARK MODE
+                    frame.getContentPane().setBackground(new Color(30, 30, 30));
+                    topPanel.setBackground(new Color(45, 45, 45));
+                    bottomPanel.setBackground(new Color(45, 45, 45));
+                    centerPanel.setBackground(new Color(30, 30, 30));
+                    cardPanel.setBackground(new Color(40, 40, 40));
+                    wordLabel.setForeground(Color.WHITE);
+                    tabooList.setForeground(new Color(200, 200, 200));
+                    darkModeToggle.setText("☀️ Light");
+                }
+            };
+
+            darkModeToggle.addActionListener(e -> {
+                darkMode[0] = darkModeToggle.isSelected();
+                applyTheme.run();
+            });
+
+            JButton correctButton = new JButton("▲ DOĞRU");
+            JButton passButton = new JButton("␣ PAS");
+            JButton tabooButton = new JButton("▼ TABU");
             JButton newGameButton = new JButton("YENİ OYUN");
 
             // Yeni: Pause'dan devam etmek için altta buton
@@ -236,22 +346,58 @@ public class Main {
                 b.setFocusable(false);
             }
 
+            correctButton.setToolTipText("Kısayol: ↑");
+            passButton.setToolTipText("Kısayol: SPACE");
+            tabooButton.setToolTipText("Kısayol: ↓");
+            newGameButton.setToolTipText("Yeni oyun");
+            resumeBottomButton.setToolTipText("Devam et (ESC / ENTER)");
+
             bottomPanel.add(correctButton);
             bottomPanel.add(passButton);
             bottomPanel.add(tabooButton);
             bottomPanel.add(newGameButton);
-            bottomPanel.add(resumeBottomButton); // yeni oyun yanında
+            bottomPanel.add(startButton); // BAŞLAT
+            bottomPanel.add(darkModeToggle); // 🌙 Dark / ☀️ Light toggle ALT PANELE TAŞINDI
+            bottomPanel.add(resumeBottomButton); // DEVAM ET
 
             // Focus sorunları
             durationBox.setFocusable(false);
             roundsBox.setFocusable(false);
             passLimitBox.setFocusable(false);
             tabooPenaltyBox.setFocusable(false);
+            teamANameField.setFocusable(true);
+            teamBNameField.setFocusable(true);
+            teamAColorButton.setFocusable(false);
+            teamBColorButton.setFocusable(false);
             startButton.setFocusable(false);
             continueButton.setFocusable(false);
+            darkModeToggle.setFocusable(false);
 
             // Start butonuna stil
             styleColoredButton(startButton, new Color(0, 150, 136), Color.WHITE);
+            // BAŞLAT butonu başlangıçta görünür olsun
+            startButton.setVisible(true);
+
+            // Renk seçimi (oyun başlamadan)
+            teamAColorButton.addActionListener(e -> {
+                if (started[0]) return;
+                Color chosen = JColorChooser.showDialog(frame, "Takım A Rengi", teamAColor[0]);
+                if (chosen != null) {
+                    teamAColor[0] = chosen;
+                    applyTeamBadgeStyles.run();
+                    infoLabel.setText("Takım A rengi güncellendi.");
+                }
+            });
+
+            teamBColorButton.addActionListener(e -> {
+                if (started[0]) return;
+                Color chosen = JColorChooser.showDialog(frame, "Takım B Rengi", teamBColor[0]);
+                if (chosen != null) {
+                    teamBColor[0] = chosen;
+                    applyTeamBadgeStyles.run();
+                    infoLabel.setText("Takım B rengi güncellendi.");
+                }
+            });
 
             // =========================
             // OYUN STATE
@@ -260,7 +406,7 @@ public class Main {
             int[] roundDuration = {60}, currentRound = {1};
             String[] team = {"A"};
             boolean[] paused = {false};
-            boolean[] started = {false};
+            boolean[] tieDecisionPending = {false}; // beraberlikte kullanıcı karar verecek
 
             // Ayarlar (Start ile set edilir)
             int[] totalRounds = {6};
@@ -367,9 +513,37 @@ public class Main {
                 }
 
                 WordCard c = cards.get(chosenIndex);
-                wordLabel.setText(c.word);
-                tabooList.setText(toHtml(c.taboo));
+
+                // Kart değişimini animasyonla yap
+                animateCardSwap(wordLabel, tabooList, () -> {
+                    wordLabel.setText(c.word);
+                    tabooList.setText(toHtml(c.taboo));
+                });
+
                 drawsThisRound[0]++;
+            };
+
+            // Oyun başlamadan önce kart yerine "OYUN HAZIR" ekranı
+            Runnable showReadyScreen = () -> {
+                overlayPanel.setVisible(false);
+                gameEndOverlay.setVisible(false);
+
+                cardPanel.setVisible(true);
+
+                wordLabel.setText("OYUN HAZIR");
+                wordLabel.setForeground(new Color(25, 25, 25));
+
+                tabooList.setText(toHtml(new String[]{
+                        "Ayarları üstten yap",
+                        "BAŞLAT'a bas",
+                        "",
+                        "Kısayollar:",
+                        "SPACE = PAS",
+                        "↑ = DOĞRU",
+                        "↓ = TABU",
+                        "ESC = DURAKLAT"
+                }));
+                tabooList.setForeground(new Color(55, 55, 55));
             };
 
             shuffleDeck.run();
@@ -383,6 +557,16 @@ public class Main {
             Runnable refreshScores = () -> {
                 scoreALabel.setText("Skor(A): " + scoreA[0]);
                 scoreBLabel.setText("Skor(B): " + scoreB[0]);
+            };
+
+            Runnable updateTeamColors = () -> {
+                if (team[0].equals("A")) {
+                    teamLabel.setText("Takım: " + teamAName[0]);
+                    styleBadgeLabel(teamLabel, lighten(teamAColor[0], 0.72f), darken(teamAColor[0], 0.35f));
+                } else {
+                    teamLabel.setText("Takım: " + teamBName[0]);
+                    styleBadgeLabel(teamLabel, lighten(teamBColor[0], 0.75f), darken(teamBColor[0], 0.35f));
+                }
             };
 
             Runnable updatePassLabel = () -> {
@@ -403,6 +587,14 @@ public class Main {
                 roundPass[0] = 0;
             };
 
+            Runnable updateRoundStatsLabel = () -> {
+                roundStatsLabel.setText(
+                        "Bu Tur: ✓ " + roundCorrect[0] +
+                                " | ␣ " + roundPass[0] +
+                                " | ✕ " + roundTaboo[0]
+                );
+            };
+
             startButton.addActionListener(e -> {
                 if (started[0]) return;
 
@@ -413,6 +605,15 @@ public class Main {
                 passLimit[0] = passSel.equals("Sınırsız") ? -1 : Integer.parseInt(passSel);
 
                 tabooPenalty[0] = Integer.parseInt((String) tabooPenaltyBox.getSelectedItem());
+
+                // Takım isimlerini uygula
+                String aName = teamANameField.getText() == null ? "" : teamANameField.getText().trim();
+                String bName = teamBNameField.getText() == null ? "" : teamBNameField.getText().trim();
+                teamAName[0] = aName.isEmpty() ? "Takım A" : aName;
+                teamBName[0] = bName.isEmpty() ? "Takım B" : bName;
+
+                // Renk/badge stillerini uygula
+                applyTeamBadgeStyles.run();
 
                 // Başlangıç state
                 started[0] = true;
@@ -425,15 +626,18 @@ public class Main {
 
                 refreshScores.run();
 
-                teamLabel.setText("Takım: " + team[0]);
+                updateTeamColors.run();
                 roundLabel.setText("Tur: " + currentRound[0] + "/" + totalRounds[0]);
 
                 timeLeft[0] = roundDuration[0];
+                timeLabel.setForeground(normalTimeColor);
                 timeLabel.setText("Süre: " + timeLeft[0]);
+                timeLabel.setVisible(true);
 
                 passCount[0] = 0;
                 updatePassLabel.run();
                 resetRoundStats.run();
+                updateRoundStatsLabel.run();
                 recentHistory.clear();
                 roundUsed.clear();
                 prevRoundShown.clear();
@@ -454,13 +658,24 @@ public class Main {
                 roundsBox.setEnabled(false);
                 passLimitBox.setEnabled(false);
                 tabooPenaltyBox.setEnabled(false);
+                teamANameField.setEnabled(false);
+                teamBNameField.setEnabled(false);
+                teamAColorButton.setEnabled(false);
+                teamBColorButton.setEnabled(false);
                 startButton.setEnabled(false);
 
+                // Oyun BAŞLADI: BAŞLAT butonunu gizle
+                startButton.setVisible(false);
+                bottomPanel.revalidate();
+                bottomPanel.repaint();
+
                 shuffleDeck.run();
+                cardPanel.setVisible(true);
                 showNextCard.run();
 
                 infoLabel.setText("Oyun başladı! Kısayollar: SPACE=PAS, ↑=DOĞRU, ↓=TABU, ESC=DURAKLAT");
 
+                updateTeamColors.run();
                 gameTimer[0].start();
             });
 
@@ -497,15 +712,18 @@ public class Main {
                 currentRound[0] = 1;
 
                 refreshScores.run();
-                teamLabel.setText("Takım: " + team[0]);
+                updateTeamColors.run();
                 roundLabel.setText("Tur: " + currentRound[0] + "/" + totalRounds[0]);
 
                 timeLeft[0] = roundDuration[0];
+                timeLabel.setForeground(normalTimeColor);
                 timeLabel.setText("Süre: " + timeLeft[0]);
+                timeLabel.setVisible(true);
 
                 passCount[0] = 0;
                 updatePassLabel.run();
                 resetRoundStats.run();
+                updateRoundStatsLabel.run();
 
                 overlayPanel.setVisible(false);
                 resumeBottomButton.setVisible(false);
@@ -537,12 +755,60 @@ public class Main {
             replayButton.addActionListener(e -> replaySameSettings.run());
             backToSettingsButton.addActionListener(e -> newGameButton.doClick());
 
+            // Yeni tura geç (holder: bazı listener'lar daha önce tanımlandığı için)
+            final Runnable[] goNextRoundNow = new Runnable[1];
+
+            // Beraberlik: "Berabere bitsin" -> oyunu berabere bitir ve Replay/Yeni Oyun'u göster
+            endDrawButton.addActionListener(e -> {
+                if (!gameEndOverlay.isVisible()) return;
+
+                tieDecisionPending[0] = false;
+
+                // Karar verildi: Replay/Yeni Oyun görünsün, karar butonları gizlensin
+                endDrawButton.setVisible(false);
+                tieBreakButton.setVisible(false);
+                replayButton.setVisible(true);
+                backToSettingsButton.setVisible(true);
+
+                gameEndResult.setText("Berabere!");
+                gameEndScores.setText(teamAName[0] + ": " + scoreA[0] + "   |   " + teamBName[0] + ": " + scoreB[0]);
+                infoLabel.setText("Oyun berabere bitti.");
+            });
+
+            // Beraberlik: "Tie-break" -> 2 ekstra tur ekle ve oyuna devam et
+            tieBreakButton.addActionListener(e -> {
+                if (!gameEndOverlay.isVisible()) return;
+
+                tieDecisionPending[0] = false;
+
+                // Tie-break: iki takım da 1'er tur daha oynasın (toplam +2 tur)
+                totalRounds[0] = totalRounds[0] + 2;
+
+                // End overlay kapat, oyuna dön
+                gameEndOverlay.setVisible(false);
+
+                // Kartı ve süreyi geri getir
+                cardPanel.setVisible(true);
+                timeLabel.setVisible(true);
+                timeLabel.setForeground(normalTimeColor);
+
+                // Karar butonlarını kapat (bir daha görünmesin)
+                endDrawButton.setVisible(false);
+                tieBreakButton.setVisible(false);
+
+                // goNextRoundNow yeni turu başlatacak (totalRounds büyüdüğü için artık "game end"e girmez)
+                infoLabel.setText("Tie-break! Her iki takım için 1'er tur eklendi.");
+                goNextRoundNow[0].run();
+
+                bottomPanel.revalidate();
+                bottomPanel.repaint();
+            });
+
             resumeBottomButton.addActionListener(e -> {
                 if (paused[0]) resumeGame.run();
             });
 
-            // Yeni tura geç
-            Runnable goNextRoundNow = () -> {
+            goNextRoundNow[0] = () -> {
                 paused[0] = false;
                 resumeBottomButton.setVisible(false);
 
@@ -559,13 +825,26 @@ public class Main {
                     resumeBottomButton.setVisible(false);
 
                     String result;
-                    if (scoreA[0] > scoreB[0]) result = "Kazanan: Takım A";
-                    else if (scoreB[0] > scoreA[0]) result = "Kazanan: Takım B";
+                    if (scoreA[0] > scoreB[0]) result = "Kazanan: " + teamAName[0];
+                    else if (scoreB[0] > scoreA[0]) result = "Kazanan: " + teamBName[0];
                     else result = "Berabere!";
 
+                    boolean isTie = (scoreA[0] == scoreB[0]);
+                    tieDecisionPending[0] = isTie;
+
+                    // Beraberlikte: Replay/Yeni Oyun'u gizle, karar butonlarını göster
+                    endDrawButton.setVisible(isTie);
+                    tieBreakButton.setVisible(isTie);
+                    replayButton.setVisible(!isTie);
+                    backToSettingsButton.setVisible(!isTie);
+
                     gameEndResult.setText(result);
-                    gameEndScores.setText("Skor(A): " + scoreA[0] + "   |   Skor(B): " + scoreB[0]);
-                    infoLabel.setText("Oyun bitti! " + result);
+                    gameEndScores.setText(teamAName[0] + ": " + scoreA[0] + "   |   " + teamBName[0] + ": " + scoreB[0]);
+                    infoLabel.setText(isTie ? "Berabere! BERABERE BİTSİN veya TIE-BREAK seç." : ("Oyun bitti! " + result));
+
+                    // ⏱ Süre rengini normale döndür (oyun bitti)
+                    timeLabel.setForeground(normalTimeColor);
+                    timeLabel.setVisible(false);
 
                     // Oyun bitti ekranında kartı gizle (üst üste binmesin)
                     cardPanel.setVisible(false);
@@ -580,12 +859,13 @@ public class Main {
                 }
 
                 team[0] = team[0].equals("A") ? "B" : "A";
-                teamLabel.setText("Takım: " + team[0]);
+                updateTeamColors.run();
 
                 currentRound[0]++;
                 roundLabel.setText("Tur: " + currentRound[0] + "/" + totalRounds[0]);
 
                 timeLeft[0] = roundDuration[0];
+                timeLabel.setForeground(normalTimeColor);
                 timeLabel.setText("Süre: " + timeLeft[0]);
                 infoLabel.setText(" ");
 
@@ -598,6 +878,7 @@ public class Main {
 
                 // Yeni tur istatistikleri sıfırla
                 resetRoundStats.run();
+                updateRoundStatsLabel.run();
                 roundUsed.clear();
                 drawsThisRound[0] = 0;
 
@@ -608,13 +889,14 @@ public class Main {
                 shuffleDeck.run();
                 showNextCard.run();
 
+                updateTeamColors.run();
                 gameTimer[0].start();
 
                 bottomPanel.revalidate();
                 bottomPanel.repaint();
             };
 
-            continueButton.addActionListener(e -> goNextRoundNow.run());
+            continueButton.addActionListener(e -> goNextRoundNow[0].run());
 
             // ENTER = DEVAM (tur bitti ekranında)
             overlayPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
@@ -622,7 +904,7 @@ public class Main {
             overlayPanel.getActionMap().put("continueRound", new AbstractAction() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
-                    if (overlayPanel.isVisible()) goNextRoundNow.run();
+                    if (overlayPanel.isVisible()) goNextRoundNow[0].run();
                 }
             });
 
@@ -631,6 +913,18 @@ public class Main {
 
                 timeLeft[0]--;
                 timeLabel.setText("Süre: " + timeLeft[0]);
+
+                // Son 10 saniye: süre kırmızı olsun
+                if (timeLeft[0] <= 10) {
+                    timeLabel.setForeground(Color.RED);
+                } else {
+                    timeLabel.setForeground(normalTimeColor);
+                }
+
+                // Son 3 saniye: bip sesi
+                if (timeLeft[0] <= 3 && timeLeft[0] > 0) {
+                    Toolkit.getDefaultToolkit().beep();
+                }
 
                 if (timeLeft[0] <= 0) {
                     gameTimer[0].stop();
@@ -657,7 +951,7 @@ public class Main {
                     waitTimer[0] = new Timer(1000, ev -> {
                         wait[0]--;
                         overlayLabel.setText("TUR BİTTİ (" + wait[0] + ")");
-                        if (wait[0] <= 0) goNextRoundNow.run();
+                        if (wait[0] <= 0) goNextRoundNow[0].run();
                     });
                     waitTimer[0].start();
                 }
@@ -670,6 +964,7 @@ public class Main {
                 if (paused[0]) return;
                 if (!started[0]) return;
                 roundCorrect[0]++;
+                updateRoundStatsLabel.run();
                 if (team[0].equals("A")) scoreA[0]++;
                 else scoreB[0]++;
                 refreshScores.run();
@@ -680,6 +975,7 @@ public class Main {
                 if (paused[0]) return;
                 if (!started[0]) return;
                 roundPass[0]++;
+                updateRoundStatsLabel.run();
                 passCount[0]++;
                 updatePassLabel.run();
                 if (!canPass.getAsBoolean()) passButton.setEnabled(false);
@@ -690,6 +986,7 @@ public class Main {
                 if (paused[0]) return;
                 if (!started[0]) return;
                 roundTaboo[0]++;
+                updateRoundStatsLabel.run();
                 if (team[0].equals("A")) scoreA[0] += tabooPenalty[0];
                 else scoreB[0] += tabooPenalty[0];
                 refreshScores.run();
@@ -707,6 +1004,10 @@ public class Main {
                 roundsBox.setEnabled(true);
                 passLimitBox.setEnabled(true);
                 tabooPenaltyBox.setEnabled(true);
+                teamANameField.setEnabled(true);
+                teamBNameField.setEnabled(true);
+                teamAColorButton.setEnabled(true);
+                teamBColorButton.setEnabled(true);
                 startButton.setEnabled(true);
 
                 // Oyun butonlarını kapat (Start beklesin)
@@ -725,17 +1026,20 @@ public class Main {
                 team[0] = "A";
                 currentRound[0] = 1;
 
-                teamLabel.setText("Takım: " + team[0]);
+                updateTeamColors.run();
                 roundLabel.setText("Tur: " + currentRound[0] + "/" + (int) roundsBox.getSelectedItem());
 
                 timeLeft[0] = roundDuration[0];
+                timeLabel.setForeground(normalTimeColor);
                 timeLabel.setText("Süre: " + timeLeft[0]);
+                timeLabel.setVisible(true);
                 infoLabel.setText("Ayarları seçip BAŞLAT'a bas.");
 
                 passCount[0] = 0;
                 updatePassLabel.run();
 
                 resetRoundStats.run();
+                updateRoundStatsLabel.run();
 
                 // Clear recent history for new game
                 recentHistory.clear();
@@ -744,9 +1048,12 @@ public class Main {
                 drawsThisRound[0] = 0;
 
                 shuffleDeck.run();
-                showNextCard.run();
+                showReadyScreen.run();
                 refreshScores.run();
 
+                updateTeamColors.run();
+                // YENİ OYUN'da BAŞLAT butonunu tekrar göster
+                startButton.setVisible(true);
                 bottomPanel.revalidate();
                 bottomPanel.repaint();
             });
@@ -797,7 +1104,7 @@ public class Main {
             frame.getRootPane().getActionMap().put("togglePause", new AbstractAction() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
-                    if (overlayPanel.isVisible() || gameEndOverlay.isVisible()) return;
+                    if (overlayPanel.isVisible() || (gameEndOverlay.isVisible() && tieDecisionPending[0])) return;
                     if (!started[0]) return;
 
                     if (!paused[0]) {
@@ -845,7 +1152,9 @@ public class Main {
             frame.add(bottomPanel, BorderLayout.SOUTH);
 
             refreshScores.run();
+            updateTeamColors.run();
             resetRoundStats.run();
+            updateRoundStatsLabel.run();
             recentHistory.clear();
             roundUsed.clear();
             prevRoundShown.clear();
@@ -856,12 +1165,25 @@ public class Main {
             tabooButton.setEnabled(false);
             infoLabel.setText("Ayarları seçip BAŞLAT'a bas.");
 
-            wordLabel.setText("BAŞLAT");
-            tabooList.setText(toHtml(new String[]{"Ayarları seç", "BAŞLAT'a bas", "SPACE=PAS", "↑=DOĞRU", "↓=TABU"}));
+            showReadyScreen.run();
 
+            updateTeamColors.run();
+            applyTheme.run();
             frame.setVisible(true);
             frame.getRootPane().requestFocusInWindow();
         });
+    }
+
+    // =========================
+    // Badge style for score labels
+    static void styleBadgeLabel(JLabel label, Color bg, Color fg) {
+        label.setOpaque(true);
+        label.setBackground(bg);
+        label.setForeground(fg);
+        label.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(darken(bg, 0.18f), 1, true),
+                new EmptyBorder(6, 12, 6, 12)
+        ));
     }
 
     // =========================
@@ -973,9 +1295,121 @@ public class Main {
         return sb.append("</html>").toString();
     }
 
+    // =========================
+    // CUSTOM PANEL: Rounded corners + shadow
+    // =========================
+    static class RoundedShadowPanel extends JPanel {
+        private final int radius;
+        private final int shadowSize;
+
+        RoundedShadowPanel(int radius, int shadowSize) {
+            super();
+            this.radius = radius;
+            this.shadowSize = shadowSize;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                int w = getWidth();
+                int h = getHeight();
+
+                // Shadow (bottom-right)
+                for (int i = shadowSize; i >= 1; i--) {
+                    float alpha = 0.06f * (i / (float) shadowSize);
+                    g2.setColor(new Color(0, 0, 0, Math.min(255, Math.max(0, Math.round(alpha * 255)))));
+                    Shape shadow = new RoundRectangle2D.Float(
+                            i, i,
+                            w - (2f * i), h - (2f * i),
+                            radius, radius
+                    );
+                    g2.fill(shadow);
+                }
+
+                // Main rounded background
+                Shape round = new RoundRectangle2D.Float(
+                        0, 0,
+                        w - shadowSize, h - shadowSize,
+                        radius, radius
+                );
+                g2.setColor(getBackground());
+                g2.fill(round);
+            } finally {
+                g2.dispose();
+            }
+            super.paintComponent(g);
+        }
+    }
+
     static class WordCard {
         String word;
         String[] taboo;
         WordCard(String w, String[] t) { word = w; taboo = t; }
+    }
+
+    // =========================
+    // CARD ANIMATION: Fade-out -> swap text -> fade-in
+    // =========================
+    static void animateCardSwap(JLabel wordLabel, JLabel tabooLabel, Runnable swapText) {
+        // Stop any ongoing animation on this word label
+        Object existing = wordLabel.getClientProperty("cardAnimTimer");
+        if (existing instanceof Timer t) {
+            t.stop();
+        }
+
+        // Base colors (keep RGB, only animate alpha)
+        Color baseWord = wordLabel.getForeground();
+        Color baseTaboo = tabooLabel.getForeground();
+
+        final int steps = 8;          // smoothness
+        final int intervalMs = 22;    // speed
+
+        final int[] phase = {0};      // 0 = fade out, 1 = fade in
+        final int[] i = {0};
+
+        Timer timer = new Timer(intervalMs, e -> {
+            // t from 0..1
+            float t = i[0] / (float) steps;
+
+            if (phase[0] == 0) {
+                // fade out: alpha 255 -> 0
+                int a = Math.max(0, Math.min(255, Math.round(255 * (1f - t))));
+                wordLabel.setForeground(new Color(baseWord.getRed(), baseWord.getGreen(), baseWord.getBlue(), a));
+                tabooLabel.setForeground(new Color(baseTaboo.getRed(), baseTaboo.getGreen(), baseTaboo.getBlue(), a));
+
+                if (i[0] >= steps) {
+                    // swap at fully faded
+                    swapText.run();
+                    phase[0] = 1;
+                    i[0] = 0;
+                    return;
+                }
+            } else {
+                // fade in: alpha 0 -> 255
+                int a = Math.max(0, Math.min(255, Math.round(255 * t)));
+                wordLabel.setForeground(new Color(baseWord.getRed(), baseWord.getGreen(), baseWord.getBlue(), a));
+                tabooLabel.setForeground(new Color(baseTaboo.getRed(), baseTaboo.getGreen(), baseTaboo.getBlue(), a));
+
+                if (i[0] >= steps) {
+                    ((Timer) e.getSource()).stop();
+                    wordLabel.putClientProperty("cardAnimTimer", null);
+
+                    // ensure fully visible at end
+                    wordLabel.setForeground(new Color(baseWord.getRed(), baseWord.getGreen(), baseWord.getBlue(), 255));
+                    tabooLabel.setForeground(new Color(baseTaboo.getRed(), baseTaboo.getGreen(), baseTaboo.getBlue(), 255));
+                    return;
+                }
+            }
+
+            i[0]++;
+        });
+
+        wordLabel.putClientProperty("cardAnimTimer", timer);
+        timer.setRepeats(true);
+        timer.start();
     }
 }
