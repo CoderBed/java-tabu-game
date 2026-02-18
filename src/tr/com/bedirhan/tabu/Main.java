@@ -319,16 +319,14 @@ public class Main {
             // overlaylar içinde en üstte dursun
             centerPanel.add(gameEndOverlay);
 
-            // =========================
             // ALT PANEL
-            // =========================
+
             JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 40, 25));
             bottomPanel.setPreferredSize(new Dimension(0, 100));
             bottomPanel.setBackground(Color.LIGHT_GRAY);
 
-            // =========================
             // THEME (LIGHT / DARK)
-            // =========================
+
             final Color LIGHT_FRAME_BG   = Color.WHITE;
             final Color LIGHT_PANEL_BG   = Color.LIGHT_GRAY;
             final Color LIGHT_CENTER_BG  = Color.WHITE;
@@ -347,7 +345,6 @@ public class Main {
             Runnable setTimeLabelNormalColor = () -> {
                 timeLabel.setForeground(darkMode[0] ? Color.WHITE : normalTimeColor);
             };
-
 
             Runnable applyTheme = () -> {
                 if (!darkMode[0]) {
@@ -482,6 +479,7 @@ public class Main {
             JButton passButton = new JButton("␣ PAS");
             JButton tabooButton = new JButton("▼ TABU");
             JButton newGameButton = new JButton("YENİ OYUN");
+            JButton undoButton = new JButton("↩︎ GERİ AL");
 
             // Yeni: Pause'dan devam etmek için altta buton
             JButton resumeBottomButton = new JButton("DEVAM ET");
@@ -493,8 +491,9 @@ public class Main {
             styleColoredButton(tabooButton, new Color(244, 67, 54), Color.WHITE);      // Kırmızı
             styleColoredButton(newGameButton, new Color(33, 150, 243), Color.WHITE);  // Mavi
             styleColoredButton(resumeBottomButton, new Color(156, 39, 176), Color.WHITE); // Mor
+            styleColoredButton(undoButton, new Color(96, 125, 139), Color.WHITE);      // Mavi-gri
 
-            for (JButton b : new JButton[]{correctButton, passButton, tabooButton, newGameButton, resumeBottomButton}) {
+            for (JButton b : new JButton[]{correctButton, passButton, tabooButton, undoButton, newGameButton, resumeBottomButton}) {
                 b.setFont(btnFont);
                 b.setPreferredSize(new Dimension(160, 45));
                 b.setFocusable(false);
@@ -503,12 +502,14 @@ public class Main {
             correctButton.setToolTipText("Kısayol: ↑");
             passButton.setToolTipText("Kısayol: SPACE");
             tabooButton.setToolTipText("Kısayol: ↓");
-            newGameButton.setToolTipText("Yeni oyun");
-            resumeBottomButton.setToolTipText("Devam et (ESC / ENTER)");
+            newGameButton.setToolTipText("Yeni Oyun");
+            resumeBottomButton.setToolTipText("Devam Et (ESC / ENTER)");
+            undoButton.setToolTipText("Son Hamleyi Geri Al ");
 
             bottomPanel.add(correctButton);
             bottomPanel.add(passButton);
             bottomPanel.add(tabooButton);
+            bottomPanel.add(undoButton);
             bottomPanel.add(newGameButton);
             bottomPanel.add(startButton); // BAŞLAT
             bottomPanel.add(darkModeToggle); // 🌙 Dark / ☀️ Light toggle ALT PANELE TAŞINDI
@@ -573,6 +574,12 @@ public class Main {
             int[] roundPass = {0};
             int[] roundStartScore = {0}; // bu tur başlamadan önce aktif takımın skoru
 
+            // Geri Al (Undo) - her turda 1 kez
+            boolean[] undoUsedThisRound = {false};
+            final String[] lastActionType = {"NONE"}; // NONE, CORRECT, PASS, TABOO
+            final String[] lastActionTeam = {"A"};
+            boolean[] canUndo = {false};
+
             // Oyun geneli takım bazlı istatistikler
             int[] totalCorrectA = {0}, totalCorrectB = {0};
             int[] totalTabooA   = {0}, totalTabooB   = {0};
@@ -607,6 +614,8 @@ public class Main {
             // Yakın geçmiş hafızası: son N kart tekrar etmesin
             final int RECENT_LIMIT = Math.min(10, Math.max(1, cards.size() - 1));
             Deque<Integer> recentHistory = new ArrayDeque<>();
+            // Geri al için kart geçmişi (son gösterilen kartlar)
+            Deque<Integer> cardHistory = new ArrayDeque<>();
 
             // Aynı tur içinde aynı kart tekrar etmesin
             Set<Integer> roundUsed = new HashSet<>();
@@ -671,6 +680,9 @@ public class Main {
                 while (recentHistory.size() > RECENT_LIMIT) {
                     recentHistory.removeFirst();
                 }
+
+                // Undo için bu kartı geçmişe ekle
+                cardHistory.addLast(chosenIndex);
 
                 WordCard c = cards.get(chosenIndex);
 
@@ -755,6 +767,11 @@ public class Main {
                 roundCorrect[0] = 0;
                 roundTaboo[0] = 0;
                 roundPass[0] = 0;
+
+                // her yeni turda geri al hakkı yenilenir
+                undoUsedThisRound[0] = false;
+                canUndo[0] = false;
+                lastActionType[0] = "NONE";
             };
 
             Runnable updateRoundStatsLabel = () -> {
@@ -767,6 +784,10 @@ public class Main {
 
             startButton.addActionListener(e -> {
                 if (started[0]) return;
+
+                undoUsedThisRound[0] = false;
+                canUndo[0] = false;
+                undoButton.setEnabled(false);
 
                 // Ayarları uygula
                 totalRounds[0] = (int) roundsBox.getSelectedItem();
@@ -817,6 +838,7 @@ public class Main {
                 roundUsed.clear();
                 prevRoundShown.clear();
                 drawsThisRound[0] = 0;
+                cardHistory.clear();
 
                 overlayPanel.setVisible(false);
                 resumeBottomButton.setVisible(false);
@@ -924,6 +946,7 @@ public class Main {
                 roundUsed.clear();
                 prevRoundShown.clear();
                 drawsThisRound[0] = 0;
+                cardHistory.clear();
 
                 shuffleDeck.run();
                 showNextCard.run();
@@ -1002,6 +1025,14 @@ public class Main {
                 paused[0] = false;
                 resumeBottomButton.setVisible(false);
 
+                // Yeni tur başı: UNDO kapalı
+                undoUsedThisRound[0] = false;
+                canUndo[0] = false;
+                undoButton.setEnabled(false);
+
+                // Yeni turda kart geçmişini temizle (undo tur içi kartlara dönsün)
+                cardHistory.clear();
+
                 if (waitTimer[0] != null) waitTimer[0].stop();
                 overlayPanel.setVisible(false);
                 // Yeni tur başlarken kart tekrar görünsün
@@ -1015,6 +1046,8 @@ public class Main {
                     correctButton.setEnabled(false);
                     passButton.setEnabled(false);
                     tabooButton.setEnabled(false);
+                    undoButton.setEnabled(false);
+                    canUndo[0] = false;
                     resumeBottomButton.setVisible(false);
 
                     String result;
@@ -1174,6 +1207,8 @@ public class Main {
                     correctButton.setEnabled(false);
                     passButton.setEnabled(false);
                     tabooButton.setEnabled(false);
+                    undoButton.setEnabled(false);
+                    canUndo[0] = false;
 
                     overlayPanel.setVisible(true);
                     // Tur bitti ekranında kart görünmesin
@@ -1205,9 +1240,8 @@ public class Main {
                 }
             });
 
-            // =========================
             // BUTONLAR
-            // =========================
+
             correctButton.addActionListener(e -> {
                 if (paused[0]) return;
                 if (!started[0]) return;
@@ -1220,6 +1254,13 @@ public class Main {
                     scoreB[0]++;
                     totalCorrectB[0]++;
                 }
+
+                // UNDO için son hamleyi kaydet
+                lastActionType[0] = "CORRECT";
+                lastActionTeam[0] = team[0];
+                canUndo[0] = true;
+                undoButton.setEnabled(!undoUsedThisRound[0]);
+
                 refreshScores.run();
                 showNextCard.run();
             });
@@ -1233,6 +1274,11 @@ public class Main {
                 if (team[0].equals("A")) totalPassA[0]++; else totalPassB[0]++;
                 updatePassLabel.run();
                 if (!canPass.getAsBoolean()) passButton.setEnabled(false);
+                // UNDO için son hamleyi kaydet
+                lastActionType[0] = "PASS";
+                lastActionTeam[0] = team[0];
+                canUndo[0] = true;
+                undoButton.setEnabled(!undoUsedThisRound[0]);
                 showNextCard.run();
             });
 
@@ -1249,12 +1295,98 @@ public class Main {
                     totalTabooB[0]++;
                 }
                 refreshScores.run();
+                // UNDO için son hamleyi kaydet
+                lastActionType[0] = "TABOO";
+                lastActionTeam[0] = team[0];
+                canUndo[0] = true;
+                undoButton.setEnabled(!undoUsedThisRound[0]);
                 showNextCard.run();
+            });
+
+            undoButton.addActionListener(e -> {
+                if (!started[0]) return;
+                if (paused[0]) return;
+                if (overlayPanel.isVisible()) return;
+                if (gameEndOverlay.isVisible()) return;
+
+                if (undoUsedThisRound[0]) return; // tur başına 1
+                if (!canUndo[0]) return;          // geri alınacak hamle yok
+                if (!team[0].equals(lastActionTeam[0])) return; // güvenlik
+
+                switch (lastActionType[0]) {
+                    case "CORRECT" -> {
+                        roundCorrect[0] = Math.max(0, roundCorrect[0] - 1);
+                        if (team[0].equals("A")) {
+                            scoreA[0] -= 1;
+                            totalCorrectA[0] = Math.max(0, totalCorrectA[0] - 1);
+                        } else {
+                            scoreB[0] -= 1;
+                            totalCorrectB[0] = Math.max(0, totalCorrectB[0] - 1);
+                        }
+                        refreshScores.run();
+                        updateRoundStatsLabel.run();
+                    }
+                    case "PASS" -> {
+                        roundPass[0] = Math.max(0, roundPass[0] - 1);
+                        passCount[0] = Math.max(0, passCount[0] - 1);
+
+                        if (team[0].equals("A")) totalPassA[0] = Math.max(0, totalPassA[0] - 1);
+                        else totalPassB[0] = Math.max(0, totalPassB[0] - 1);
+
+                        updatePassLabel.run();
+                        updateRoundStatsLabel.run();
+                        passButton.setEnabled(canPass.getAsBoolean());
+                    }
+                    case "TABOO" -> {
+                        roundTaboo[0] = Math.max(0, roundTaboo[0] - 1);
+                        if (team[0].equals("A")) {
+                            scoreA[0] -= tabooPenalty[0]; // cezanın tersini uygula
+                            totalTabooA[0] = Math.max(0, totalTabooA[0] - 1);
+                        } else {
+                            scoreB[0] -= tabooPenalty[0];
+                            totalTabooB[0] = Math.max(0, totalTabooB[0] - 1);
+                        }
+                        refreshScores.run();
+                        updateRoundStatsLabel.run();
+                    }
+                    default -> { return; }
+                }
+
+                // 🔙 Kartı da bir öncekiye geri al
+                // showNextCard her hamlede geçmişe eklediği için burada:
+                // 1) son gösterilen kartı çıkar
+                // 2) bir önceki kartı tekrar ekrana bas
+                if (cardHistory.size() >= 2) {
+                    // Şu an ekranda olan kart
+                    cardHistory.removeLast();
+                    // Bir önceki kart
+                    int prevIndex = cardHistory.getLast();
+                    WordCard prev = cards.get(prevIndex);
+
+                    animateCardSwap(wordLabel, tabooList, () -> {
+                        wordLabel.setText(prev.word);
+                        String[] shuffledTaboos = shuffledCopy(prev.taboo);
+                        tabooList.setText(toHtml(shuffledTaboos));
+                    });
+                }
+
+                undoUsedThisRound[0] = true;
+                canUndo[0] = false;
+                lastActionType[0] = "NONE";
+                undoButton.setEnabled(false);
+
+                infoLabel.setText("Geri al kullanıldı (tur başına 1 kez).");
             });
 
             newGameButton.addActionListener(e -> {
                 if (waitTimer[0] != null) waitTimer[0].stop();
                 if (gameTimer[0] != null) gameTimer[0].stop();
+
+                // YENİ OYUN: UNDO tamamen sıfırlanır
+                undoUsedThisRound[0] = false;
+                canUndo[0] = false;
+                undoButton.setEnabled(false);
+                cardHistory.clear();
 
                 started[0] = false;
 
