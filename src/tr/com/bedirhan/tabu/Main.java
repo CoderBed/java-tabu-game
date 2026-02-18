@@ -1407,9 +1407,8 @@ public class Main {
                 }
             });
 
-            // =========================
             // PANELE EKLE
-            // =========================
+
             frame.add(topPanel, BorderLayout.NORTH);
             frame.add(centerPanel, BorderLayout.CENTER);
             frame.add(bottomPanel, BorderLayout.SOUTH);
@@ -1437,7 +1436,6 @@ public class Main {
         });
     }
 
-    // =========================
     // Badge style for score labels
     static void styleBadgeLabel(JLabel label, Color bg, Color fg) {
         label.setOpaque(true);
@@ -1452,9 +1450,8 @@ public class Main {
         ));
     }
 
-    // =========================
     // UI HELPERS (Hover + Disabled)
-    // =========================
+
     static Color darken(Color c, float factor) {
         factor = Math.max(0f, Math.min(1f, factor));
         int r = Math.max(0, Math.round(c.getRed() * (1f - factor)));
@@ -1584,9 +1581,8 @@ public class Main {
         return list.toArray(new String[0]);
     }
 
-    // =========================
     // CUSTOM PANEL: Rounded corners + shadow
-    // =========================
+
     static class RoundedShadowPanel extends JPanel {
         private final int radius;
         private final int shadowSize;
@@ -1640,9 +1636,8 @@ public class Main {
         WordCard(String w, String[] t) { word = w; taboo = t; }
     }
 
-    // =========================
     // CARD ANIMATION: Fade-out -> swap text -> fade-in
-    // =========================
+
     static void animateCardSwap(JLabel wordLabel, JLabel tabooLabel, Runnable swapText) {
         // Stop any ongoing animation on this word label
         Object existing = wordLabel.getClientProperty("cardAnimTimer");
