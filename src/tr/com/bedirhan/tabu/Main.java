@@ -206,12 +206,20 @@ public class Main {
             overlayLabel.setFont(new Font("Arial", Font.BOLD, 42));
             overlayLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
+            // Mini round summary label (inserted after overlayLabel)
+            JLabel roundSummaryLabel = new JLabel(" ", SwingConstants.CENTER);
+            roundSummaryLabel.setForeground(Color.WHITE);
+            roundSummaryLabel.setFont(new Font("Arial", Font.PLAIN, 20));
+            roundSummaryLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
             JButton continueButton = new JButton("DEVAM");
             continueButton.setFont(new Font("Arial", Font.BOLD, 18));
             continueButton.setAlignmentX(Component.CENTER_ALIGNMENT);
             continueButton.setPreferredSize(new Dimension(160, 45));
 
             overlayContent.add(overlayLabel);
+            overlayContent.add(Box.createVerticalStrut(10));
+            overlayContent.add(roundSummaryLabel);
             overlayContent.add(Box.createVerticalStrut(20));
             overlayContent.add(continueButton);
 
@@ -552,6 +560,7 @@ public class Main {
             int[] roundCorrect = {0};
             int[] roundTaboo = {0};
             int[] roundPass = {0};
+            int[] roundStartScore = {0}; // bu tur başlamadan önce aktif takımın skoru
 
             // (final sabitler yerine, start ile ayarlanacak değişkenler kullanıyoruz)
 
@@ -776,6 +785,7 @@ public class Main {
                 timeLeft[0] = roundDuration[0];
                 setTimeLabelNormalColor.run();
                 timeLabel.setText("Süre: " + timeLeft[0]);
+                roundStartScore[0] = team[0].equals("A") ? scoreA[0] : scoreB[0];
                 timeLabel.setVisible(true);
 
                 passCount[0] = 0;
@@ -863,6 +873,7 @@ public class Main {
                 setTimeLabelNormalColor.run();
                 timeLabel.setText("Süre: " + timeLeft[0]);
                 timeLabel.setVisible(true);
+                roundStartScore[0] = team[0].equals("A") ? scoreA[0] : scoreB[0];
 
                 passCount[0] = 0;
                 updatePassLabel.run();
@@ -958,6 +969,9 @@ public class Main {
 
                 if (waitTimer[0] != null) waitTimer[0].stop();
                 overlayPanel.setVisible(false);
+                // Yeni tur başlarken kart tekrar görünsün
+                cardPanel.setVisible(true);
+                roundSummaryLabel.setText(" ");
 
                 if (currentRound[0] >= totalRounds[0]) {
                     if (gameTimer[0] != null) gameTimer[0].stop();
@@ -1004,6 +1018,7 @@ public class Main {
 
                 team[0] = team[0].equals("A") ? "B" : "A";
                 updateTeamColors[0].run();
+                roundStartScore[0] = team[0].equals("A") ? scoreA[0] : scoreB[0];
 
                 currentRound[0]++;
                 roundLabel.setText("Tur: " + currentRound[0] + "/" + totalRounds[0]);
@@ -1040,7 +1055,10 @@ public class Main {
                 bottomPanel.repaint();
             };
 
-            continueButton.addActionListener(e -> goNextRoundNow[0].run());
+            continueButton.addActionListener(e -> {
+                cardPanel.setVisible(true);
+                goNextRoundNow[0].run();
+            });
 
             // ENTER = DEVAM (tur bitti ekranında)
             overlayPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
@@ -1078,15 +1096,21 @@ public class Main {
                     tabooButton.setEnabled(false);
 
                     overlayPanel.setVisible(true);
+                    // Tur bitti ekranında kart görünmesin
+                    cardPanel.setVisible(false);
 
-                    // Tur özeti (10 sn ekranda kalsın)
-                    int teamScore = team[0].equals("A") ? scoreA[0] : scoreB[0];
-                    infoLabel.setText(
-                            "Tur " + currentRound[0] + " bitti | Takım " + team[0]
-                                    + " | Skor: " + teamScore
-                                    + " | Doğru: " + roundCorrect[0]
-                                    + " | Tabu: " + roundTaboo[0]
-                                    + " | Pas: " + roundPass[0]
+                    // Mini tur özeti (overlay içinde)
+                    int teamEndScore = team[0].equals("A") ? scoreA[0] : scoreB[0];
+                    int gained = teamEndScore - roundStartScore[0];
+                    String gainedText = (gained >= 0 ? "+" : "") + gained;
+
+                    roundSummaryLabel.setText(
+                            "<html><center>"
+                                    + "Bu Tur: ✓ " + roundCorrect[0]
+                                    + " | ␣ " + roundPass[0]
+                                    + " | ✕ " + roundTaboo[0]
+                                    + "<br>Tur Puanı: " + gainedText
+                                    + "</center></html>"
                     );
 
                     wait[0] = 10;
