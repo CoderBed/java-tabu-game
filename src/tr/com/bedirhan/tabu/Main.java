@@ -238,7 +238,10 @@ public class Main {
             JPanel gameEndContent = new JPanel();
             gameEndContent.setOpaque(false);
             gameEndContent.setLayout(new BoxLayout(gameEndContent, BoxLayout.Y_AXIS));
-            gameEndContent.setPreferredSize(new Dimension(520, 300));
+            // Daha uzun metin + butonlar sığsın (özellikle beraberlikte 2 karar butonu)
+            gameEndContent.setMinimumSize(new Dimension(560, 360));
+            gameEndContent.setPreferredSize(new Dimension(650, 420));
+            gameEndContent.setBorder(new EmptyBorder(10, 10, 10, 10));
 
             JLabel gameEndTitle = new JLabel("OYUN BİTTİ", SwingConstants.CENTER);
             gameEndTitle.setForeground(Color.WHITE);
@@ -254,6 +257,11 @@ public class Main {
             gameEndScores.setForeground(Color.WHITE);
             gameEndScores.setFont(new Font("Arial", Font.PLAIN, 22));
             gameEndScores.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel gameEndStats = new JLabel(" ", SwingConstants.CENTER);
+            gameEndStats.setForeground(Color.WHITE);
+            gameEndStats.setFont(new Font("Arial", Font.PLAIN, 18));
+            gameEndStats.setAlignmentX(Component.CENTER_ALIGNMENT);
 
             JPanel gameEndButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 18, 10));
             gameEndButtons.setOpaque(false);
@@ -296,11 +304,14 @@ public class Main {
             gameEndButtons.add(backToSettingsButton);
 
             gameEndContent.add(gameEndTitle);
-            gameEndContent.add(Box.createVerticalStrut(18));
+            gameEndContent.add(Box.createVerticalStrut(14));
             gameEndContent.add(gameEndResult);
             gameEndContent.add(Box.createVerticalStrut(10));
             gameEndContent.add(gameEndScores);
-            gameEndContent.add(Box.createVerticalStrut(20));
+            gameEndContent.add(Box.createVerticalStrut(16));
+            gameEndContent.add(gameEndStats);
+            gameEndContent.add(Box.createVerticalStrut(14));
+            // Butonlar her zaman görünür olsun
             gameEndContent.add(gameEndButtons);
 
             gameEndOverlay.add(gameEndContent);
@@ -562,6 +573,11 @@ public class Main {
             int[] roundPass = {0};
             int[] roundStartScore = {0}; // bu tur başlamadan önce aktif takımın skoru
 
+            // Oyun geneli takım bazlı istatistikler
+            int[] totalCorrectA = {0}, totalCorrectB = {0};
+            int[] totalTabooA   = {0}, totalTabooB   = {0};
+            int[] totalPassA    = {0}, totalPassB    = {0};
+
             // (final sabitler yerine, start ile ayarlanacak değişkenler kullanıyoruz)
 
             durationBox.setSelectedItem(60);
@@ -661,7 +677,8 @@ public class Main {
                 // Kart değişimini animasyonla yap
                 animateCardSwap(wordLabel, tabooList, () -> {
                     wordLabel.setText(c.word);
-                    tabooList.setText(toHtml(c.taboo));
+                    String[] shuffledTaboos = shuffledCopy(c.taboo);
+                    tabooList.setText(toHtml(shuffledTaboos));
                 });
 
                 drawsThisRound[0]++;
@@ -792,6 +809,10 @@ public class Main {
                 updatePassLabel.run();
                 resetRoundStats.run();
                 updateRoundStatsLabel.run();
+                totalCorrectA[0] = totalCorrectB[0] = 0;
+                totalTabooA[0]   = totalTabooB[0]   = 0;
+                totalPassA[0]    = totalPassB[0]    = 0;
+                gameEndStats.setText(" ");
                 recentHistory.clear();
                 roundUsed.clear();
                 prevRoundShown.clear();
@@ -879,6 +900,10 @@ public class Main {
                 updatePassLabel.run();
                 resetRoundStats.run();
                 updateRoundStatsLabel.run();
+                totalCorrectA[0] = totalCorrectB[0] = 0;
+                totalTabooA[0]   = totalTabooB[0]   = 0;
+                totalPassA[0]    = totalPassB[0]    = 0;
+                gameEndStats.setText(" ");
 
                 overlayPanel.setVisible(false);
                 resumeBottomButton.setVisible(false);
@@ -925,6 +950,9 @@ public class Main {
                 replayButton.setVisible(true);
                 backToSettingsButton.setVisible(true);
 
+                gameEndButtons.revalidate();
+                gameEndButtons.repaint();
+
                 gameEndResult.setText("Berabere!");
                 gameEndScores.setText(teamAName[0] + ": " + scoreA[0] + "   |   " + teamBName[0] + ": " + scoreB[0]);
                 infoLabel.setText("Oyun berabere bitti.");
@@ -942,6 +970,8 @@ public class Main {
                 // End overlay kapat, oyuna dön
                 gameEndOverlay.setVisible(false);
 
+                gameEndStats.setText(" ");
+
                 // Kartı ve süreyi geri getir
                 cardPanel.setVisible(true);
                 timeLabel.setVisible(true);
@@ -957,6 +987,11 @@ public class Main {
 
                 bottomPanel.revalidate();
                 bottomPanel.repaint();
+
+                gameEndButtons.revalidate();
+                gameEndButtons.repaint();
+                gameEndOverlay.revalidate();
+                gameEndOverlay.repaint();
             });
 
             resumeBottomButton.addActionListener(e -> {
@@ -996,8 +1031,53 @@ public class Main {
                     replayButton.setVisible(!isTie);
                     backToSettingsButton.setVisible(!isTie);
 
-                    gameEndResult.setText(result);
+                    // Görünürlük değişince layout'u tazele (özellikle beraberlikte karar butonları için)
+                    gameEndButtons.revalidate();
+                    gameEndButtons.repaint();
+                    gameEndContent.revalidate();
+                    gameEndContent.repaint();
+                    gameEndOverlay.revalidate();
+                    gameEndOverlay.repaint();
+
+                    // Beraberlikte kullanıcıdan seçim iste
+                    if (isTie) {
+                        gameEndResult.setText("Berabere! Seçim yap:");
+                    } else {
+                        gameEndResult.setText(result);
+                    }
                     gameEndScores.setText(teamAName[0] + ": " + scoreA[0] + "   |   " + teamBName[0] + ": " + scoreB[0]);
+
+                    // ===== OYUN SONU DETAY RAPOR =====
+                    int aTotalActions = totalCorrectA[0] + totalPassA[0] + totalTabooA[0];
+                    int bTotalActions = totalCorrectB[0] + totalPassB[0] + totalTabooB[0];
+
+                    int aCorrectPct = aTotalActions == 0 ? 0 : Math.round(100f * totalCorrectA[0] / aTotalActions);
+                    int aPassPct    = aTotalActions == 0 ? 0 : Math.round(100f * totalPassA[0]    / aTotalActions);
+                    int aTabooPct   = aTotalActions == 0 ? 0 : Math.round(100f * totalTabooA[0]   / aTotalActions);
+
+                    int bCorrectPct = bTotalActions == 0 ? 0 : Math.round(100f * totalCorrectB[0] / bTotalActions);
+                    int bPassPct    = bTotalActions == 0 ? 0 : Math.round(100f * totalPassB[0]    / bTotalActions);
+                    int bTabooPct   = bTotalActions == 0 ? 0 : Math.round(100f * totalTabooB[0]   / bTotalActions);
+
+                    String mostCorrect;
+                    if (totalCorrectA[0] > totalCorrectB[0]) mostCorrect = "En çok doğru: " + teamAName[0] + " (" + totalCorrectA[0] + ")";
+                    else if (totalCorrectB[0] > totalCorrectA[0]) mostCorrect = "En çok doğru: " + teamBName[0] + " (" + totalCorrectB[0] + ")";
+                    else mostCorrect = "En çok doğru: Berabere (" + totalCorrectA[0] + ")";
+
+                    String mostTaboo;
+                    if (totalTabooA[0] > totalTabooB[0]) mostTaboo = "En çok tabu: " + teamAName[0] + " (" + totalTabooA[0] + ")";
+                    else if (totalTabooB[0] > totalTabooA[0]) mostTaboo = "En çok tabu: " + teamBName[0] + " (" + totalTabooB[0] + ")";
+                    else mostTaboo = "En çok tabu: Berabere (" + totalTabooA[0] + ")";
+
+                    gameEndStats.setText(
+                            "<html><center>"
+                                    + mostCorrect + "<br>"
+                                    + mostTaboo + "<br><br>"
+                                    + "<b>Oranlar</b><br>"
+                                    + teamAName[0] + ": ✓ " + aCorrectPct + "% | ␣ " + aPassPct + "% | ✕ " + aTabooPct + "%<br>"
+                                    + teamBName[0] + ": ✓ " + bCorrectPct + "% | ␣ " + bPassPct + "% | ✕ " + bTabooPct + "%"
+                                    + "</center></html>"
+                    );
                     infoLabel.setText(isTie ? "Berabere! BERABERE BİTSİN veya TIE-BREAK seç." : ("Oyun bitti! " + result));
 
                     // ⏱ Süre rengini normale döndür (oyun bitti)
@@ -1133,8 +1213,13 @@ public class Main {
                 if (!started[0]) return;
                 roundCorrect[0]++;
                 updateRoundStatsLabel.run();
-                if (team[0].equals("A")) scoreA[0]++;
-                else scoreB[0]++;
+                if (team[0].equals("A")) {
+                    scoreA[0]++;
+                    totalCorrectA[0]++;
+                } else {
+                    scoreB[0]++;
+                    totalCorrectB[0]++;
+                }
                 refreshScores.run();
                 showNextCard.run();
             });
@@ -1145,6 +1230,7 @@ public class Main {
                 roundPass[0]++;
                 updateRoundStatsLabel.run();
                 passCount[0]++;
+                if (team[0].equals("A")) totalPassA[0]++; else totalPassB[0]++;
                 updatePassLabel.run();
                 if (!canPass.getAsBoolean()) passButton.setEnabled(false);
                 showNextCard.run();
@@ -1155,8 +1241,13 @@ public class Main {
                 if (!started[0]) return;
                 roundTaboo[0]++;
                 updateRoundStatsLabel.run();
-                if (team[0].equals("A")) scoreA[0] += tabooPenalty[0];
-                else scoreB[0] += tabooPenalty[0];
+                if (team[0].equals("A")) {
+                    scoreA[0] += tabooPenalty[0];
+                    totalTabooA[0]++;
+                } else {
+                    scoreB[0] += tabooPenalty[0];
+                    totalTabooB[0]++;
+                }
                 refreshScores.run();
                 showNextCard.run();
             });
@@ -1208,6 +1299,10 @@ public class Main {
 
                 resetRoundStats.run();
                 updateRoundStatsLabel.run();
+                totalCorrectA[0] = totalCorrectB[0] = 0;
+                totalTabooA[0]   = totalTabooB[0]   = 0;
+                totalPassA[0]    = totalPassB[0]    = 0;
+                gameEndStats.setText(" ");
 
                 // Clear recent history for new game
                 recentHistory.clear();
@@ -1478,6 +1573,15 @@ public class Main {
         StringBuilder sb = new StringBuilder("<html>");
         for (String s : t) sb.append("- ").append(s).append("<br>");
         return sb.append("</html>").toString();
+    }
+
+    // Tabu kelimeleri (ana kelimeyi etkilemeden) her gösterimde karıştırmak için
+    static String[] shuffledCopy(String[] arr) {
+        if (arr == null) return new String[0];
+        List<String> list = new ArrayList<>();
+        for (String s : arr) list.add(s);
+        Collections.shuffle(list);
+        return list.toArray(new String[0]);
     }
 
     // =========================
