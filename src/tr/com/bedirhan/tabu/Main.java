@@ -90,16 +90,31 @@ public class Main {
             // Oyun başladı mı? (bazı UI aksiyonları oyun başlamadan çalışmasın)
             final boolean[] started = {false};
             final boolean[] darkMode = {false};
+            // updateTeamColors, applyTheme içinde kullanılıyor (aşağıda atanacak)
+            final Runnable[] updateTeamColors = new Runnable[1];
 
             // Skor etiketlerini "badge" gibi göster
             Runnable applyTeamBadgeStyles = () -> {
-                Color scoreABg = lighten(teamAColor[0], 0.72f);
-                Color scoreBBg = lighten(teamBColor[0], 0.75f);
-                styleBadgeLabel(scoreALabel, scoreABg, darken(teamAColor[0], 0.35f));
-                styleBadgeLabel(scoreBLabel, scoreBBg, darken(teamBColor[0], 0.35f));
+                // Light/Dark'a göre badge kontrastını otomatik ayarla
+                if (!darkMode[0]) {
+                    // LIGHT: açık badge + koyu border
+                    Color scoreABg = lighten(teamAColor[0], 0.72f);
+                    Color scoreBBg = lighten(teamBColor[0], 0.75f);
+                    styleBadgeLabel(scoreALabel, scoreABg, darken(teamAColor[0], 0.35f));
+                    styleBadgeLabel(scoreBLabel, scoreBBg, darken(teamBColor[0], 0.35f));
 
-                // Takım etiketi badge stili (aktif takıma göre updateTeamColors içinde güncellenecek)
-                styleBadgeLabel(teamLabel, lighten(teamAColor[0], 0.72f), darken(teamAColor[0], 0.35f));
+                    // Takım etiketi badge stili (aktif takıma göre updateTeamColors içinde güncellenecek)
+                    styleBadgeLabel(teamLabel, lighten(teamAColor[0], 0.72f), darken(teamAColor[0], 0.35f));
+                } else {
+                    // DARK: daha koyu badge + açık yazı + daha görünür border
+                    Color scoreABg = darken(teamAColor[0], 0.45f);
+                    Color scoreBBg = darken(teamBColor[0], 0.45f);
+                    styleBadgeLabel(scoreALabel, scoreABg, Color.WHITE);
+                    styleBadgeLabel(scoreBLabel, scoreBBg, Color.WHITE);
+
+                    // Takım etiketi badge stili (aktif takıma göre updateTeamColors içinde güncellenecek)
+                    styleBadgeLabel(teamLabel, darken(teamAColor[0], 0.45f), Color.WHITE);
+                }
             };
 
             applyTeamBadgeStyles.run();
@@ -295,33 +310,153 @@ public class Main {
             // =========================
             // THEME (LIGHT / DARK)
             // =========================
+            final Color LIGHT_FRAME_BG   = Color.WHITE;
+            final Color LIGHT_PANEL_BG   = Color.LIGHT_GRAY;
+            final Color LIGHT_CENTER_BG  = Color.WHITE;
+            final Color LIGHT_CARD_BG    = Color.WHITE;
+            final Color LIGHT_WORD_FG    = new Color(25, 25, 25);
+            final Color LIGHT_TABOO_FG   = new Color(55, 55, 55);
+
+            final Color DARK_FRAME_BG    = new Color(30, 30, 30);
+            final Color DARK_PANEL_BG    = new Color(45, 45, 45);
+            final Color DARK_CENTER_BG   = new Color(30, 30, 30);
+            final Color DARK_CARD_BG     = new Color(40, 40, 40);
+            final Color DARK_WORD_FG     = Color.WHITE;
+            final Color DARK_TABOO_FG    = new Color(200, 200, 200);
+
+            // Süre etiketi için tema-dostu normal renk (applyTheme içinde de kullanılıyor)
+            Runnable setTimeLabelNormalColor = () -> {
+                timeLabel.setForeground(darkMode[0] ? Color.WHITE : normalTimeColor);
+            };
+
+
             Runnable applyTheme = () -> {
                 if (!darkMode[0]) {
                     // LIGHT MODE
-                    frame.getContentPane().setBackground(Color.WHITE);
-                    topPanel.setBackground(Color.LIGHT_GRAY);
-                    bottomPanel.setBackground(Color.LIGHT_GRAY);
-                    centerPanel.setBackground(Color.WHITE);
-                    cardPanel.setBackground(Color.WHITE);
-                    wordLabel.setForeground(new Color(25, 25, 25));
-                    tabooList.setForeground(new Color(55, 55, 55));
+                    frame.getContentPane().setBackground(LIGHT_FRAME_BG);
+                    topPanel.setBackground(LIGHT_PANEL_BG);
+                    bottomPanel.setBackground(LIGHT_PANEL_BG);
+                    centerPanel.setBackground(LIGHT_CENTER_BG);
+                    cardPanel.setBackground(LIGHT_CARD_BG);
+                    wordLabel.setForeground(LIGHT_WORD_FG);
+                    tabooList.setForeground(LIGHT_TABOO_FG);
                     darkModeToggle.setText("🌙 Dark");
+                    // Top panel label/text renklerini varsayılan koyu yap
+                    Color lightText = Color.BLACK;
+
+                    teamLabel.setForeground(lightText);
+                    setTimeLabelNormalColor.run();
+                    passLabel.setForeground(lightText);
+                    roundLabel.setForeground(lightText);
+                    roundStatsLabel.setForeground(lightText);
+                    durationLabel.setForeground(lightText);
+                    roundsLabel.setForeground(lightText);
+                    passLimitLabel.setForeground(lightText);
+                    tabooPenaltyLabel.setForeground(lightText);
+                    teamANameLabel.setForeground(lightText);
+                    teamBNameLabel.setForeground(lightText);
+                    infoLabel.setForeground(lightText);
+
+                    // Badge kontrastını güncelle
+                    applyTeamBadgeStyles.run();
+                    if (updateTeamColors[0] != null) updateTeamColors[0].run();
                 } else {
                     // DARK MODE
-                    frame.getContentPane().setBackground(new Color(30, 30, 30));
-                    topPanel.setBackground(new Color(45, 45, 45));
-                    bottomPanel.setBackground(new Color(45, 45, 45));
-                    centerPanel.setBackground(new Color(30, 30, 30));
-                    cardPanel.setBackground(new Color(40, 40, 40));
-                    wordLabel.setForeground(Color.WHITE);
-                    tabooList.setForeground(new Color(200, 200, 200));
+                    frame.getContentPane().setBackground(DARK_FRAME_BG);
+                    topPanel.setBackground(DARK_PANEL_BG);
+                    bottomPanel.setBackground(DARK_PANEL_BG);
+                    centerPanel.setBackground(DARK_CENTER_BG);
+                    cardPanel.setBackground(DARK_CARD_BG);
+                    wordLabel.setForeground(DARK_WORD_FG);
+                    tabooList.setForeground(DARK_TABOO_FG);
                     darkModeToggle.setText("☀️ Light");
+                    // Top panel label/text renklerini beyaz yap
+                    Color darkText = Color.WHITE;
+
+                    teamLabel.setForeground(darkText);
+                    setTimeLabelNormalColor.run();
+                    passLabel.setForeground(darkText);
+                    roundLabel.setForeground(darkText);
+                    roundStatsLabel.setForeground(darkText);
+                    durationLabel.setForeground(darkText);
+                    roundsLabel.setForeground(darkText);
+                    passLimitLabel.setForeground(darkText);
+                    tabooPenaltyLabel.setForeground(darkText);
+                    teamANameLabel.setForeground(darkText);
+                    teamBNameLabel.setForeground(darkText);
+                    infoLabel.setForeground(darkText);
+
+                    // Badge kontrastını güncelle
+                    applyTeamBadgeStyles.run();
+                    if (updateTeamColors[0] != null) updateTeamColors[0].run();
                 }
+            };
+
+            // Animasyonlu tema geçişi (fade light ↔ dark)
+            final boolean[] themeAnimating = {false};
+            Runnable animateThemeToTarget = () -> {
+                if (themeAnimating[0]) return;
+
+                // Başlangıç renkleri (mevcut UI'dan oku)
+                Color fromFrame  = frame.getContentPane().getBackground();
+                Color fromTop    = topPanel.getBackground();
+                Color fromBottom = bottomPanel.getBackground();
+                Color fromCenter = centerPanel.getBackground();
+                Color fromCard   = cardPanel.getBackground();
+                Color fromWord   = wordLabel.getForeground();
+                Color fromTaboo  = tabooList.getForeground();
+
+                // Hedef renkleri (darkMode[0] state'ine göre)
+                Color toFrame  = darkMode[0] ? DARK_FRAME_BG  : LIGHT_FRAME_BG;
+                Color toTop    = darkMode[0] ? DARK_PANEL_BG  : LIGHT_PANEL_BG;
+                Color toBottom = darkMode[0] ? DARK_PANEL_BG  : LIGHT_PANEL_BG;
+                Color toCenter = darkMode[0] ? DARK_CENTER_BG : LIGHT_CENTER_BG;
+                Color toCard   = darkMode[0] ? DARK_CARD_BG   : LIGHT_CARD_BG;
+                Color toWord   = darkMode[0] ? DARK_WORD_FG   : LIGHT_WORD_FG;
+                Color toTaboo  = darkMode[0] ? DARK_TABOO_FG  : LIGHT_TABOO_FG;
+
+                final int steps = 14;      // daha yumuşak geçiş
+                final int interval = 18;   // ms
+
+                themeAnimating[0] = true;
+                darkModeToggle.setEnabled(false);
+
+                final int[] i = {0};
+                Timer themeTimer = new Timer(interval, ev -> {
+                    float t = i[0] / (float) steps; // 0..1
+
+                    frame.getContentPane().setBackground(lerpColor(fromFrame, toFrame, t));
+                    topPanel.setBackground(lerpColor(fromTop, toTop, t));
+                    bottomPanel.setBackground(lerpColor(fromBottom, toBottom, t));
+                    centerPanel.setBackground(lerpColor(fromCenter, toCenter, t));
+                    cardPanel.setBackground(lerpColor(fromCard, toCard, t));
+                    wordLabel.setForeground(lerpColor(fromWord, toWord, t));
+                    tabooList.setForeground(lerpColor(fromTaboo, toTaboo, t));
+
+                    // repaint
+                    frame.repaint();
+
+                    if (i[0] >= steps) {
+                        ((Timer) ev.getSource()).stop();
+                        themeAnimating[0] = false;
+                        darkModeToggle.setEnabled(true);
+
+                        // Final snap + toggle yazısı
+                        applyTheme.run();
+                        // Tema animasyonu bitince badge/etiket kontrastını kesinleştir
+                        applyTeamBadgeStyles.run();
+                        if (updateTeamColors[0] != null) updateTeamColors[0].run();
+                    }
+
+                    i[0]++;
+                });
+                themeTimer.setRepeats(true);
+                themeTimer.start();
             };
 
             darkModeToggle.addActionListener(e -> {
                 darkMode[0] = darkModeToggle.isSelected();
-                applyTheme.run();
+                animateThemeToTarget.run();
             });
 
             JButton correctButton = new JButton("▲ DOĞRU");
@@ -559,13 +694,21 @@ public class Main {
                 scoreBLabel.setText("Skor(B): " + scoreB[0]);
             };
 
-            Runnable updateTeamColors = () -> {
+            updateTeamColors[0] = () -> {
                 if (team[0].equals("A")) {
                     teamLabel.setText("Takım: " + teamAName[0]);
-                    styleBadgeLabel(teamLabel, lighten(teamAColor[0], 0.72f), darken(teamAColor[0], 0.35f));
+                    if (!darkMode[0]) {
+                        styleBadgeLabel(teamLabel, lighten(teamAColor[0], 0.72f), darken(teamAColor[0], 0.35f));
+                    } else {
+                        styleBadgeLabel(teamLabel, darken(teamAColor[0], 0.45f), Color.WHITE);
+                    }
                 } else {
                     teamLabel.setText("Takım: " + teamBName[0]);
-                    styleBadgeLabel(teamLabel, lighten(teamBColor[0], 0.75f), darken(teamBColor[0], 0.35f));
+                    if (!darkMode[0]) {
+                        styleBadgeLabel(teamLabel, lighten(teamBColor[0], 0.75f), darken(teamBColor[0], 0.35f));
+                    } else {
+                        styleBadgeLabel(teamLabel, darken(teamBColor[0], 0.45f), Color.WHITE);
+                    }
                 }
             };
 
@@ -576,6 +719,7 @@ public class Main {
                     passLabel.setText("Pas: " + passCount[0] + "/" + passLimit[0]);
                 }
             };
+
 
             java.util.function.BooleanSupplier canPass = () -> {
                 if (passLimit[0] == -1) return true;
@@ -626,11 +770,11 @@ public class Main {
 
                 refreshScores.run();
 
-                updateTeamColors.run();
+                updateTeamColors[0].run();
                 roundLabel.setText("Tur: " + currentRound[0] + "/" + totalRounds[0]);
 
                 timeLeft[0] = roundDuration[0];
-                timeLabel.setForeground(normalTimeColor);
+                setTimeLabelNormalColor.run();
                 timeLabel.setText("Süre: " + timeLeft[0]);
                 timeLabel.setVisible(true);
 
@@ -675,7 +819,7 @@ public class Main {
 
                 infoLabel.setText("Oyun başladı! Kısayollar: SPACE=PAS, ↑=DOĞRU, ↓=TABU, ESC=DURAKLAT");
 
-                updateTeamColors.run();
+                updateTeamColors[0].run();
                 gameTimer[0].start();
             });
 
@@ -712,11 +856,11 @@ public class Main {
                 currentRound[0] = 1;
 
                 refreshScores.run();
-                updateTeamColors.run();
+                updateTeamColors[0].run();
                 roundLabel.setText("Tur: " + currentRound[0] + "/" + totalRounds[0]);
 
                 timeLeft[0] = roundDuration[0];
-                timeLabel.setForeground(normalTimeColor);
+                setTimeLabelNormalColor.run();
                 timeLabel.setText("Süre: " + timeLeft[0]);
                 timeLabel.setVisible(true);
 
@@ -790,7 +934,7 @@ public class Main {
                 // Kartı ve süreyi geri getir
                 cardPanel.setVisible(true);
                 timeLabel.setVisible(true);
-                timeLabel.setForeground(normalTimeColor);
+                setTimeLabelNormalColor.run();
 
                 // Karar butonlarını kapat (bir daha görünmesin)
                 endDrawButton.setVisible(false);
@@ -843,7 +987,7 @@ public class Main {
                     infoLabel.setText(isTie ? "Berabere! BERABERE BİTSİN veya TIE-BREAK seç." : ("Oyun bitti! " + result));
 
                     // ⏱ Süre rengini normale döndür (oyun bitti)
-                    timeLabel.setForeground(normalTimeColor);
+                    setTimeLabelNormalColor.run();
                     timeLabel.setVisible(false);
 
                     // Oyun bitti ekranında kartı gizle (üst üste binmesin)
@@ -859,13 +1003,13 @@ public class Main {
                 }
 
                 team[0] = team[0].equals("A") ? "B" : "A";
-                updateTeamColors.run();
+                updateTeamColors[0].run();
 
                 currentRound[0]++;
                 roundLabel.setText("Tur: " + currentRound[0] + "/" + totalRounds[0]);
 
                 timeLeft[0] = roundDuration[0];
-                timeLabel.setForeground(normalTimeColor);
+                setTimeLabelNormalColor.run();
                 timeLabel.setText("Süre: " + timeLeft[0]);
                 infoLabel.setText(" ");
 
@@ -889,7 +1033,7 @@ public class Main {
                 shuffleDeck.run();
                 showNextCard.run();
 
-                updateTeamColors.run();
+                updateTeamColors[0].run();
                 gameTimer[0].start();
 
                 bottomPanel.revalidate();
@@ -918,7 +1062,7 @@ public class Main {
                 if (timeLeft[0] <= 10) {
                     timeLabel.setForeground(Color.RED);
                 } else {
-                    timeLabel.setForeground(normalTimeColor);
+                    setTimeLabelNormalColor.run();
                 }
 
                 // Son 3 saniye: bip sesi
@@ -1026,11 +1170,11 @@ public class Main {
                 team[0] = "A";
                 currentRound[0] = 1;
 
-                updateTeamColors.run();
+                updateTeamColors[0].run();
                 roundLabel.setText("Tur: " + currentRound[0] + "/" + (int) roundsBox.getSelectedItem());
 
                 timeLeft[0] = roundDuration[0];
-                timeLabel.setForeground(normalTimeColor);
+                setTimeLabelNormalColor.run();
                 timeLabel.setText("Süre: " + timeLeft[0]);
                 timeLabel.setVisible(true);
                 infoLabel.setText("Ayarları seçip BAŞLAT'a bas.");
@@ -1051,7 +1195,7 @@ public class Main {
                 showReadyScreen.run();
                 refreshScores.run();
 
-                updateTeamColors.run();
+                updateTeamColors[0].run();
                 // YENİ OYUN'da BAŞLAT butonunu tekrar göster
                 startButton.setVisible(true);
                 bottomPanel.revalidate();
@@ -1152,7 +1296,7 @@ public class Main {
             frame.add(bottomPanel, BorderLayout.SOUTH);
 
             refreshScores.run();
-            updateTeamColors.run();
+            updateTeamColors[0].run();
             resetRoundStats.run();
             updateRoundStatsLabel.run();
             recentHistory.clear();
@@ -1167,7 +1311,7 @@ public class Main {
 
             showReadyScreen.run();
 
-            updateTeamColors.run();
+            updateTeamColors[0].run();
             applyTheme.run();
             frame.setVisible(true);
             frame.getRootPane().requestFocusInWindow();
@@ -1180,8 +1324,11 @@ public class Main {
         label.setOpaque(true);
         label.setBackground(bg);
         label.setForeground(fg);
+        // Border: arka plan koyuysa biraz aç, açıkysa biraz koyulaştır
+        boolean darkBg = (bg.getRed() + bg.getGreen() + bg.getBlue()) < (3 * 128);
+        Color border = darkBg ? lighten(bg, 0.22f) : darken(bg, 0.18f);
         label.setBorder(BorderFactory.createCompoundBorder(
-                new LineBorder(darken(bg, 0.18f), 1, true),
+                new LineBorder(border, 1, true),
                 new EmptyBorder(6, 12, 6, 12)
         ));
     }
@@ -1203,6 +1350,20 @@ public class Main {
         int g = Math.min(255, Math.round(c.getGreen() + (255 - c.getGreen()) * factor));
         int b = Math.min(255, Math.round(c.getBlue() + (255 - c.getBlue()) * factor));
         return new Color(r, g, b);
+    }
+
+    static Color lerpColor(Color a, Color b, float t) {
+        t = Math.max(0f, Math.min(1f, t));
+        int r = Math.round(a.getRed() + (b.getRed() - a.getRed()) * t);
+        int g = Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t);
+        int bl = Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * t);
+        int al = Math.round(a.getAlpha() + (b.getAlpha() - a.getAlpha()) * t);
+        return new Color(
+                Math.max(0, Math.min(255, r)),
+                Math.max(0, Math.min(255, g)),
+                Math.max(0, Math.min(255, bl)),
+                Math.max(0, Math.min(255, al))
+        );
     }
 
     static void pulseButton(JButton button, Color normalBg, Color normalFg) {
