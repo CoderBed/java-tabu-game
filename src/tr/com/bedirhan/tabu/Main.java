@@ -18,6 +18,14 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Set;
+import javax.swing.table.DefaultTableModel;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class Main {
 
@@ -90,8 +98,15 @@ public class Main {
             // Oyun başladı mı? (bazı UI aksiyonları oyun başlamadan çalışmasın)
             final boolean[] started = {false};
             final boolean[] darkMode = {false};
+            // Fullscreen presentation mode state
+            final boolean[] presentationMode = {false};
+            final Rectangle[] windowedBounds = new Rectangle[1];
+            final int[] windowedExtendedState = {JFrame.NORMAL};
+            final boolean[] usedDeviceFullscreen = {false};
             // updateTeamColors, applyTheme içinde kullanılıyor (aşağıda atanacak)
             final Runnable[] updateTeamColors = new Runnable[1];
+            // applyTheme togglePresentationMode içinde kullanıldığı için holder
+            final Runnable[] applyTheme = new Runnable[1];
 
             // Skor etiketlerini "badge" gibi göster
             Runnable applyTeamBadgeStyles = () -> {
@@ -349,9 +364,21 @@ public class Main {
 
             // ALT PANEL
 
-            JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 40, 25));
-            bottomPanel.setPreferredSize(new Dimension(0, 100));
+            // ALT PANEL (2 satır: taşmayı engeller)
+            JPanel bottomPanel = new JPanel(new GridLayout(2, 1, 0, 8));
+            bottomPanel.setPreferredSize(new Dimension(0, 120));
             bottomPanel.setBackground(Color.LIGHT_GRAY);
+
+            JPanel bottomRow1 = new JPanel(new FlowLayout(FlowLayout.CENTER, 18, 10));
+            bottomRow1.setOpaque(true);
+            bottomRow1.setBackground(Color.LIGHT_GRAY);
+
+            JPanel bottomRow2 = new JPanel(new FlowLayout(FlowLayout.CENTER, 18, 10));
+            bottomRow2.setOpaque(true);
+            bottomRow2.setBackground(Color.LIGHT_GRAY);
+
+            bottomPanel.add(bottomRow1);
+            bottomPanel.add(bottomRow2);
 
             // THEME (LIGHT / DARK)
 
@@ -374,12 +401,115 @@ public class Main {
                 timeLabel.setForeground(darkMode[0] ? Color.WHITE : normalTimeColor);
             };
 
-            Runnable applyTheme = () -> {
+            // Sunum Modu (F11) - applyTheme dışında tanımlı olmalı ki kısayoldan çağrılabilsin
+            final Runnable[] togglePresentationMode = new Runnable[1];
+
+            togglePresentationMode[0] = () -> {
+                presentationMode[0] = !presentationMode[0];
+
+                GraphicsDevice gd = GraphicsEnvironment
+                        .getLocalGraphicsEnvironment()
+                        .getDefaultScreenDevice();
+
+                if (presentationMode[0]) {
+                    // pencere durumunu sakla
+                    windowedBounds[0] = frame.getBounds();
+                    windowedExtendedState[0] = frame.getExtendedState();
+                    usedDeviceFullscreen[0] = false;
+
+                    // sadece kart + süre
+                    topPanel.setVisible(true);
+                    bottomPanel.setVisible(false);
+
+                    // üst panelde sadece süre kalsın
+                    teamLabel.setVisible(false);
+                    scoreALabel.setVisible(false);
+                    scoreBLabel.setVisible(false);
+                    passLabel.setVisible(false);
+                    roundLabel.setVisible(false);
+                    roundStatsLabel.setVisible(false);
+                    durationLabel.setVisible(false);
+                    roundsLabel.setVisible(false);
+                    passLimitLabel.setVisible(false);
+                    tabooPenaltyLabel.setVisible(false);
+                    teamANameLabel.setVisible(false);
+                    teamBNameLabel.setVisible(false);
+                    teamANameField.setVisible(false);
+                    teamBNameField.setVisible(false);
+                    teamAColorButton.setVisible(false);
+                    teamBColorButton.setVisible(false);
+                    infoLabel.setVisible(false);
+
+                    timeLabel.setFont(new Font("Arial", Font.BOLD, 28));
+                    cardPanel.setPreferredSize(new Dimension(900, 420));
+
+                    // Fullscreen dene (bazı macOS durumlarında desteklenmeyebilir)
+                    try {
+                        frame.dispose();
+                        frame.setUndecorated(true);
+                        frame.setVisible(true);
+
+                        if (gd.isFullScreenSupported()) {
+                            gd.setFullScreenWindow(frame);
+                            usedDeviceFullscreen[0] = true;
+                        } else {
+                            // Fallback: ekranı kapla (borderless maximize)
+                            Rectangle b = gd.getDefaultConfiguration().getBounds();
+                            frame.setBounds(b);
+                            frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+                        }
+                    } catch (Exception ex) {
+                        // Son çare: sadece maximize
+                        Rectangle b = gd.getDefaultConfiguration().getBounds();
+                        frame.setBounds(b);
+                        frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+                    }
+
+                    infoLabel.setText("Sunum modu: F11 (veya buton) ile çık.");
+                } else {
+                    // fullscreen kapat
+                    try {
+                        if (usedDeviceFullscreen[0]) {
+                            gd.setFullScreenWindow(null);
+                        }
+                    } catch (Exception ignore) {
+                    }
+
+                    frame.dispose();
+                    frame.setUndecorated(false);
+                    if (windowedBounds[0] != null) {
+                        frame.setBounds(windowedBounds[0]);
+                    }
+                    frame.setExtendedState(windowedExtendedState[0]);
+                    frame.setVisible(true);
+
+                    // her şeyi geri getir
+                    topPanel.setVisible(true);
+                    bottomPanel.setVisible(true);
+
+                    for (Component c : topPanel.getComponents()) {
+                        c.setVisible(true);
+                    }
+
+                    timeLabel.setFont(new Font("Arial", Font.BOLD, 19));
+                    cardPanel.setPreferredSize(new Dimension(700, 330));
+
+            // tema/text renklerini tekrar uygula
+            if (applyTheme[0] != null) applyTheme[0].run();
+                }
+
+                frame.revalidate();
+                frame.repaint();
+            };
+
+            applyTheme[0] = () -> {
                 if (!darkMode[0]) {
                     // LIGHT MODE
                     frame.getContentPane().setBackground(LIGHT_FRAME_BG);
                     topPanel.setBackground(LIGHT_PANEL_BG);
                     bottomPanel.setBackground(LIGHT_PANEL_BG);
+                    bottomRow1.setBackground(bottomPanel.getBackground());
+                    bottomRow2.setBackground(bottomPanel.getBackground());
                     centerPanel.setBackground(LIGHT_CENTER_BG);
                     cardPanel.setBackground(LIGHT_CARD_BG);
                     wordLabel.setForeground(LIGHT_WORD_FG);
@@ -484,9 +614,8 @@ public class Main {
                         ((Timer) ev.getSource()).stop();
                         themeAnimating[0] = false;
                         darkModeToggle.setEnabled(true);
-
                         // Final snap + toggle yazısı
-                        applyTheme.run();
+                        if (applyTheme[0] != null) applyTheme[0].run();
                         // Tema animasyonu bitince badge/etiket kontrastını kesinleştir
                         applyTeamBadgeStyles.run();
                         if (updateTeamColors[0] != null) updateTeamColors[0].run();
@@ -512,6 +641,8 @@ public class Main {
             // Yeni: Pause'dan devam etmek için altta buton
             JButton resumeBottomButton = new JButton("DEVAM ET");
             resumeBottomButton.setVisible(false); // başlangıçta gizli
+            JButton presentationButton = new JButton("⛶ SUNUM");
+            JButton historyButton = new JButton("📜 GEÇMİŞ");
 
             // Buton renkleri + hover + disabled soluk görünüm
             styleColoredButton(correctButton, new Color(76, 175, 80), Color.WHITE);    // Yeşil
@@ -519,11 +650,13 @@ public class Main {
             styleColoredButton(tabooButton, new Color(244, 67, 54), Color.WHITE);      // Kırmızı
             styleColoredButton(newGameButton, new Color(33, 150, 243), Color.WHITE);  // Mavi
             styleColoredButton(resumeBottomButton, new Color(156, 39, 176), Color.WHITE); // Mor
+            styleColoredButton(presentationButton, new Color(0, 121, 107), Color.WHITE); // Teal
             styleColoredButton(undoButton, new Color(96, 125, 139), Color.WHITE);      // Mavi-gri
+            styleColoredButton(historyButton, new Color(121, 85, 72), Color.WHITE); // Kahverengi
 
-            for (JButton b : new JButton[]{correctButton, passButton, tabooButton, undoButton, newGameButton, resumeBottomButton}) {
+            for (JButton b : new JButton[]{correctButton, passButton, tabooButton, undoButton, historyButton, newGameButton, presentationButton, resumeBottomButton}) {
                 b.setFont(btnFont);
-                b.setPreferredSize(new Dimension(160, 45));
+                b.setPreferredSize(new Dimension(140, 45));
                 b.setFocusable(false);
             }
 
@@ -533,15 +666,21 @@ public class Main {
             newGameButton.setToolTipText("Yeni Oyun");
             resumeBottomButton.setToolTipText("Devam Et (ESC / ENTER)");
             undoButton.setToolTipText("Son Hamleyi Geri Al ");
+            historyButton.setToolTipText("Son 5 oyun kaydı");
 
-            bottomPanel.add(correctButton);
-            bottomPanel.add(passButton);
-            bottomPanel.add(tabooButton);
-            bottomPanel.add(undoButton);
-            bottomPanel.add(newGameButton);
-            bottomPanel.add(startButton); // BAŞLAT
-            bottomPanel.add(darkModeToggle); // 🌙 Dark / ☀️ Light toggle ALT PANELE TAŞINDI
-            bottomPanel.add(resumeBottomButton); // DEVAM ET
+            // 1. satır: oyun aksiyonları
+            bottomRow1.add(correctButton);
+            bottomRow1.add(passButton);
+            bottomRow1.add(tabooButton);
+            bottomRow1.add(undoButton);
+            bottomRow1.add(newGameButton);
+            bottomRow1.add(startButton); // BAŞLAT
+
+            // 2. satır: yardımcı butonlar
+            bottomRow2.add(historyButton);
+            bottomRow2.add(presentationButton);
+            bottomRow2.add(darkModeToggle);     // 🌙 Dark / ☀️ Light
+            bottomRow2.add(resumeBottomButton); // DEVAM ET
 
             // Focus sorunları
             durationBox.setFocusable(false);
@@ -1009,6 +1148,7 @@ public class Main {
 
                 gameEndResult.setText("Berabere!");
                 gameEndScores.setText(teamAName[0] + ": " + scoreA[0] + "   |   " + teamBName[0] + ": " + scoreB[0]);
+                appendGameHistory(teamAName[0], teamBName[0], scoreA[0], scoreB[0], "Berabere");
                 infoLabel.setText("Oyun berabere bitti.");
             });
 
@@ -1050,6 +1190,66 @@ public class Main {
 
             resumeBottomButton.addActionListener(e -> {
                 if (paused[0]) resumeGame.run();
+            });
+
+            presentationButton.addActionListener(e -> {
+                // oyun başlamadan da açılabilsin (hazır ekranı sunumda gösterilebilir)
+                togglePresentationMode[0].run();
+            });
+            historyButton.addActionListener(e -> {
+                JDialog dlg = new JDialog(frame, "Geçmiş Oyunlar", true);
+                dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+
+                String[] cols = {"Tarih", "Takımlar", "Skor", "Sonuç"};
+                DefaultTableModel model = new DefaultTableModel(cols, 0) {
+                    @Override public boolean isCellEditable(int row, int column) { return false; }
+                };
+
+                java.util.List<String[]> rows = readGameHistory();
+                if (rows.isEmpty()) {
+                    model.addRow(new Object[]{"-", "-", "-", "Henüz kayıt yok"});
+                } else {
+                    // newest-first
+                    for (int i = rows.size() - 1; i >= 0; i--) {
+                        String[] r = rows.get(i);
+                        String tarih = r.length > 0 ? r[0] : "";
+                        String takimlar = r.length > 2 ? (r[1] + " / " + r[2]) : "";
+                        String skor = r.length > 4 ? (r[3] + " - " + r[4]) : "";
+                        String sonuc = r.length > 5 ? r[5] : "";
+                        model.addRow(new Object[]{tarih, takimlar, skor, sonuc});
+                    }
+                }
+
+                JTable table = new JTable(model);
+                table.setRowHeight(26);
+                JScrollPane sp = new JScrollPane(table);
+                sp.setPreferredSize(new Dimension(720, 260));
+
+                JButton close = new JButton("KAPAT");
+                styleColoredButton(close, new Color(33, 150, 243), Color.WHITE);
+                close.setFocusable(false);
+                close.addActionListener(ev -> dlg.dispose());
+
+                JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+                south.add(close);
+
+                dlg.getContentPane().setLayout(new BorderLayout());
+                dlg.getContentPane().add(sp, BorderLayout.CENTER);
+                dlg.getContentPane().add(south, BorderLayout.SOUTH);
+
+                // Dark mode uyumu (basit)
+                if (darkMode[0]) {
+                    dlg.getContentPane().setBackground(new Color(45,45,45));
+                    south.setBackground(new Color(45,45,45));
+                    table.setBackground(new Color(40,40,40));
+                    table.setForeground(Color.WHITE);
+                    table.getTableHeader().setBackground(new Color(60,60,60));
+                    table.getTableHeader().setForeground(Color.WHITE);
+                }
+
+                dlg.pack();
+                dlg.setLocationRelativeTo(frame);
+                dlg.setVisible(true);
             });
 
             // Tur başlamadan geri sayım (3-2-1) -> sonra oyun başlar
@@ -1218,6 +1418,11 @@ public class Main {
                     cardPanel.setVisible(false);
                     wordLabel.setText("");
                     tabooList.setText("");
+
+                    if (!isTie) {
+                        String finalWinner = (scoreA[0] > scoreB[0]) ? teamAName[0] : teamBName[0];
+                        appendGameHistory(teamAName[0], teamBName[0], scoreA[0], scoreB[0], "Kazanan: " + finalWinner);
+                    }
 
                     gameEndOverlay.setVisible(true);
 
@@ -1558,6 +1763,20 @@ public class Main {
             });
 
             // KLAVYE KISAYOLLARI
+            frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                    .put(KeyStroke.getKeyStroke("pressed F11"), "toggleFullscreen");
+            // Alternatif kısayollar (macOS'ta F11 sistem tarafından yakalanabiliyor)
+            frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                    .put(KeyStroke.getKeyStroke("ctrl pressed F11"), "toggleFullscreen");
+            frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                    .put(KeyStroke.getKeyStroke("meta shift pressed F"), "toggleFullscreen"); // ⌘⇧F
+
+            frame.getRootPane().getActionMap().put("toggleFullscreen", new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    togglePresentationMode[0].run();
+                }
+            });
             // SPACE = PAS
             frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
                     .put(KeyStroke.getKeyStroke("pressed SPACE"), "passAction");
@@ -1603,6 +1822,11 @@ public class Main {
             frame.getRootPane().getActionMap().put("togglePause", new AbstractAction() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
+                    // Sunum modundayken ESC her zaman sunum modundan çıkarsın (kilitlenmeyi önler)
+                    if (presentationMode[0]) {
+                        togglePresentationMode[0].run();
+                        return;
+                    }
                     if (overlayPanel.isVisible() || (gameEndOverlay.isVisible() && tieDecisionPending[0])) return;
                     if (!started[0]) return;
                     if (preRoundCounting[0]) return;
@@ -1635,6 +1859,11 @@ public class Main {
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     // Tur bitti ekranındayken ENTER zaten overlayPanel tarafından yönetiliyor
+                    // Sunum modundayken ENTER ile de çıkabilsin
+                    if (presentationMode[0]) {
+                        togglePresentationMode[0].run();
+                        return;
+                    }
                     if (overlayPanel.isVisible()) return;
                     if (preRoundCounting[0]) return;
 
@@ -1663,12 +1892,12 @@ public class Main {
             correctButton.setEnabled(false);
             passButton.setEnabled(false);
             tabooButton.setEnabled(false);
-            infoLabel.setText("Ayarları seçip BAŞLAT'a bas.");
+            infoLabel.setText("Ayarları seçip BAŞLAT'a bas. Sunum modu: F11 (macOS'ta Fn+F11) veya ⛶ SUNUM.");
 
             showReadyScreen.run();
 
             updateTeamColors[0].run();
-            applyTheme.run();
+            if (applyTheme[0] != null) applyTheme[0].run();
             frame.setVisible(true);
             frame.getRootPane().requestFocusInWindow();
         });
@@ -1866,6 +2095,63 @@ public class Main {
             }
             super.paintComponent(g);
         }
+    }
+
+    static Path historyFilePath() {
+        // Kullanıcı klasöründe küçük bir TSV dosyası
+        return Paths.get(System.getProperty("user.home"), ".tabu_game_history.tsv");
+    }
+
+    static void appendGameHistory(String teamA, String teamB, int scoreA, int scoreB, String result) {
+        try {
+            Path p = historyFilePath();
+            java.util.List<String> lines = Files.exists(p) ? Files.readAllLines(p) : new java.util.ArrayList<>();
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+            String ts = LocalDateTime.now().format(fmt);
+
+            teamA = safeTsv(teamA);
+            teamB = safeTsv(teamB);
+            result = safeTsv(result);
+
+            lines.add(ts + "\t" + teamA + "\t" + teamB + "\t" + scoreA + "\t" + scoreB + "\t" + result);
+
+            while (lines.size() > 5) lines.remove(0);
+
+            // home path var, ama yine de güvenli
+            Files.createDirectories(p.getParent());
+            try (BufferedWriter bw = Files.newBufferedWriter(p)) {
+                for (String l : lines) {
+                    bw.write(l);
+                    bw.newLine();
+                }
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    static java.util.List<String[]> readGameHistory() {
+        try {
+            Path p = historyFilePath();
+            if (!Files.exists(p)) return new java.util.ArrayList<>();
+            java.util.List<String> lines = Files.readAllLines(p);
+
+            java.util.List<String[]> out = new java.util.ArrayList<>();
+            for (String l : lines) {
+                if (l == null || l.isBlank()) continue;
+                out.add(l.split("\t", -1));
+            }
+            return out;
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            return new java.util.ArrayList<>();
+        }
+    }
+
+    static String safeTsv(String s) {
+        if (s == null) return "";
+        return s.replace("\t", " ").replace("\n", " ").replace("\r", " ").trim();
     }
 
     static class WordCard {
