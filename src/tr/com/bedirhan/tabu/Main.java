@@ -319,6 +319,34 @@ public class Main {
             // overlaylar içinde en üstte dursun
             centerPanel.add(gameEndOverlay);
 
+            // HAZIRIM OVERLAY (tur başlamadan 3-2-1 geri sayım)
+            JPanel readyOverlay = new JPanel(new GridBagLayout());
+            readyOverlay.setBackground(new Color(0, 0, 0, 170));
+            readyOverlay.setVisible(false);
+
+            JPanel readyContent = new JPanel();
+            readyContent.setOpaque(false);
+            readyContent.setLayout(new BoxLayout(readyContent, BoxLayout.Y_AXIS));
+
+            JLabel readyTitle = new JLabel("HAZIR MISIN?", SwingConstants.CENTER);
+            readyTitle.setForeground(Color.WHITE);
+            readyTitle.setFont(new Font("Arial", Font.BOLD, 32));
+            readyTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel readyCountLabel = new JLabel("3", SwingConstants.CENTER);
+            readyCountLabel.setForeground(Color.WHITE);
+            readyCountLabel.setFont(new Font("Arial", Font.BOLD, 96));
+            readyCountLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            readyContent.add(readyTitle);
+            readyContent.add(Box.createVerticalStrut(10));
+            readyContent.add(readyCountLabel);
+
+            readyOverlay.add(readyContent);
+
+            // en üstte dursun
+            centerPanel.add(readyOverlay);
+
             // ALT PANEL
 
             JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 40, 25));
@@ -554,13 +582,13 @@ public class Main {
                 }
             });
 
-            // =========================
             // OYUN STATE
-            // =========================
+
             int[] scoreA = {0}, scoreB = {0}, timeLeft = {60}, passCount = {0};
             int[] roundDuration = {60}, currentRound = {1};
             String[] team = {"A"};
             boolean[] paused = {false};
+            boolean[] preRoundCounting = {false};
             boolean[] tieDecisionPending = {false}; // beraberlikte kullanıcı karar verecek
 
             // Ayarlar (Start ile set edilir)
@@ -599,9 +627,8 @@ public class Main {
                 infoLabel.setText("Seçilen süre (" + roundDuration[0] + " sn) bir sonraki turda uygulanacak.");
             });
 
-            // =========================
             // CSV
-            // =========================
+
             List<WordCard> cards = loadCardsFromCsv("words.csv");
             if (cards.isEmpty()) {
                 JOptionPane.showMessageDialog(frame, "words.csv bulunamadı veya boş!");
@@ -614,8 +641,8 @@ public class Main {
             // Yakın geçmiş hafızası: son N kart tekrar etmesin
             final int RECENT_LIMIT = Math.min(10, Math.max(1, cards.size() - 1));
             Deque<Integer> recentHistory = new ArrayDeque<>();
-            // Geri al için kart geçmişi (son gösterilen kartlar)
-            Deque<Integer> cardHistory = new ArrayDeque<>();
+            // Geri al için kart geçmişi (son gösterilen kartlar + o an ekranda görünen tabu sırası)
+            Deque<ShownCard> cardHistory = new ArrayDeque<>();
 
             // Aynı tur içinde aynı kart tekrar etmesin
             Set<Integer> roundUsed = new HashSet<>();
@@ -681,16 +708,16 @@ public class Main {
                     recentHistory.removeFirst();
                 }
 
-                // Undo için bu kartı geçmişe ekle
-                cardHistory.addLast(chosenIndex);
-
                 WordCard c = cards.get(chosenIndex);
+
+                // Bu kart için tabu sırasını bir kez üret ve hem ekrana bas hem de UNDO için sakla
+                String[] shownTaboos = shuffledCopy(c.taboo);
+                cardHistory.addLast(new ShownCard(chosenIndex, shownTaboos));
 
                 // Kart değişimini animasyonla yap
                 animateCardSwap(wordLabel, tabooList, () -> {
                     wordLabel.setText(c.word);
-                    String[] shuffledTaboos = shuffledCopy(c.taboo);
-                    tabooList.setText(toHtml(shuffledTaboos));
+                    tabooList.setText(toHtml(shownTaboos));
                 });
 
                 drawsThisRound[0]++;
@@ -726,6 +753,10 @@ public class Main {
             Timer[] gameTimer = new Timer[1];
             Timer[] waitTimer = new Timer[1];
             final int[] wait = {0};
+            Timer[] readyTimer = new Timer[1];
+            final int[] readyCount = {0};
+            // startPreRoundCountdown bazı listener'larda tanımlanmadan önce çağrıldığı için holder kullanıyoruz
+            final Runnable[] startPreRoundCountdown = new Runnable[1];
 
             Runnable refreshScores = () -> {
                 scoreALabel.setText("Skor(A): " + scoreA[0]);
@@ -873,7 +904,7 @@ public class Main {
                 infoLabel.setText("Oyun başladı! Kısayollar: SPACE=PAS, ↑=DOĞRU, ↓=TABU, ESC=DURAKLAT");
 
                 updateTeamColors[0].run();
-                gameTimer[0].start();
+                if (startPreRoundCountdown[0] != null) startPreRoundCountdown[0].run();
             });
 
             // Pause'tan devam (alttaki butonla)
@@ -952,7 +983,7 @@ public class Main {
                 showNextCard.run();
 
                 infoLabel.setText("Tekrar başladı! Kısayollar: SPACE=PAS, ↑=DOĞRU, ↓=TABU, ESC=DURAKLAT");
-                gameTimer[0].start();
+                if (startPreRoundCountdown[0] != null) startPreRoundCountdown[0].run();
             };
 
             replayButton.addActionListener(e -> replaySameSettings.run());
@@ -1021,8 +1052,74 @@ public class Main {
                 if (paused[0]) resumeGame.run();
             });
 
+            // Tur başlamadan geri sayım (3-2-1) -> sonra oyun başlar
+            startPreRoundCountdown[0] = () -> {
+                if (!started[0]) return;
+
+                // Tur bitti / oyun sonu ekranları açıkken başlamasın
+                if (overlayPanel.isVisible() || gameEndOverlay.isVisible()) return;
+
+                if (preRoundCounting[0]) return;
+
+                // süre şimdilik akmasın
+                if (gameTimer[0] != null) gameTimer[0].stop();
+
+                preRoundCounting[0] = true;
+
+                // gameplay kapalı
+                correctButton.setEnabled(false);
+                passButton.setEnabled(false);
+                tabooButton.setEnabled(false);
+                undoButton.setEnabled(false);
+                canUndo[0] = false;
+
+                // kart gizle, overlay aç
+                cardPanel.setVisible(false);
+                readyOverlay.setVisible(true);
+
+                readyCount[0] = 3;
+                readyCountLabel.setText(String.valueOf(readyCount[0]));
+                infoLabel.setText("Hazırlan... " + readyCount[0]);
+
+                if (readyTimer[0] != null) readyTimer[0].stop();
+                readyTimer[0] = new Timer(1000, ev -> {
+                    readyCount[0]--;
+
+                    if (readyCount[0] > 0) {
+                        readyCountLabel.setText(String.valueOf(readyCount[0]));
+                        infoLabel.setText("Hazırlan... " + readyCount[0]);
+                        Toolkit.getDefaultToolkit().beep();
+                        return;
+                    }
+
+                    ((Timer) ev.getSource()).stop();
+                    preRoundCounting[0] = false;
+
+                    readyOverlay.setVisible(false);
+                    cardPanel.setVisible(true);
+                    infoLabel.setText(" ");
+
+                    // butonları aç
+                    correctButton.setEnabled(true);
+                    tabooButton.setEnabled(true);
+                    passButton.setEnabled(canPass.getAsBoolean());
+
+                    // undo yeni tur başında kapalı
+                    undoButton.setEnabled(false);
+
+                    // süre normal renge dönsün, timer başlasın
+                    setTimeLabelNormalColor.run();
+                    if (gameTimer[0] != null) gameTimer[0].start();
+                });
+                readyTimer[0].setRepeats(true);
+                readyTimer[0].start();
+            };
+
             goNextRoundNow[0] = () -> {
                 paused[0] = false;
+                preRoundCounting[0] = false;
+                if (readyTimer[0] != null) readyTimer[0].stop();
+                readyOverlay.setVisible(false);
                 resumeBottomButton.setVisible(false);
 
                 // Yeni tur başı: UNDO kapalı
@@ -1162,7 +1259,7 @@ public class Main {
                 showNextCard.run();
 
                 updateTeamColors[0].run();
-                gameTimer[0].start();
+                if (startPreRoundCountdown[0] != null) startPreRoundCountdown[0].run();
 
                 bottomPanel.revalidate();
                 bottomPanel.repaint();
@@ -1211,6 +1308,7 @@ public class Main {
                     canUndo[0] = false;
 
                     overlayPanel.setVisible(true);
+                    readyOverlay.setVisible(false);
                     // Tur bitti ekranında kart görünmesin
                     cardPanel.setVisible(false);
 
@@ -1245,6 +1343,7 @@ public class Main {
             correctButton.addActionListener(e -> {
                 if (paused[0]) return;
                 if (!started[0]) return;
+                if (preRoundCounting[0]) return;
                 roundCorrect[0]++;
                 updateRoundStatsLabel.run();
                 if (team[0].equals("A")) {
@@ -1268,6 +1367,7 @@ public class Main {
             passButton.addActionListener(e -> {
                 if (paused[0]) return;
                 if (!started[0]) return;
+                if (preRoundCounting[0]) return;
                 roundPass[0]++;
                 updateRoundStatsLabel.run();
                 passCount[0]++;
@@ -1285,6 +1385,7 @@ public class Main {
             tabooButton.addActionListener(e -> {
                 if (paused[0]) return;
                 if (!started[0]) return;
+                if (preRoundCounting[0]) return;
                 roundTaboo[0]++;
                 updateRoundStatsLabel.run();
                 if (team[0].equals("A")) {
@@ -1306,6 +1407,7 @@ public class Main {
             undoButton.addActionListener(e -> {
                 if (!started[0]) return;
                 if (paused[0]) return;
+                if (preRoundCounting[0]) return;
                 if (overlayPanel.isVisible()) return;
                 if (gameEndOverlay.isVisible()) return;
 
@@ -1352,21 +1454,19 @@ public class Main {
                     default -> { return; }
                 }
 
-                // 🔙 Kartı da bir öncekiye geri al
-                // showNextCard her hamlede geçmişe eklediği için burada:
-                // 1) son gösterilen kartı çıkar
-                // 2) bir önceki kartı tekrar ekrana bas
+                // 🔙 Kartı da bir öncekiye geri al (animasyonla) ve tabu sırası aynı kalsın
+                // showNextCard her gösterimde geçmişe (kart + tabu sırası) ekliyor.
                 if (cardHistory.size() >= 2) {
-                    // Şu an ekranda olan kart
+                    // Şu an ekranda olan kartı çıkar
                     cardHistory.removeLast();
-                    // Bir önceki kart
-                    int prevIndex = cardHistory.getLast();
-                    WordCard prev = cards.get(prevIndex);
+
+                    // Bir önceki kartı ekrana bas
+                    ShownCard prevShown = cardHistory.getLast();
+                    WordCard prev = cards.get(prevShown.index);
 
                     animateCardSwap(wordLabel, tabooList, () -> {
                         wordLabel.setText(prev.word);
-                        String[] shuffledTaboos = shuffledCopy(prev.taboo);
-                        tabooList.setText(toHtml(shuffledTaboos));
+                        tabooList.setText(toHtml(prevShown.shownTaboos));
                     });
                 }
 
@@ -1381,6 +1481,10 @@ public class Main {
             newGameButton.addActionListener(e -> {
                 if (waitTimer[0] != null) waitTimer[0].stop();
                 if (gameTimer[0] != null) gameTimer[0].stop();
+
+                if (readyTimer[0] != null) readyTimer[0].stop();
+                preRoundCounting[0] = false;
+                readyOverlay.setVisible(false);
 
                 // YENİ OYUN: UNDO tamamen sıfırlanır
                 undoUsedThisRound[0] = false;
@@ -1461,7 +1565,7 @@ public class Main {
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     if (!started[0]) return;
-                    if (!overlayPanel.isVisible() && !paused[0] && passButton.isEnabled()) {
+                    if (!overlayPanel.isVisible() && !paused[0] && !preRoundCounting[0] && passButton.isEnabled()) {
                         passButton.doClick();
                     }
                 }
@@ -1474,7 +1578,7 @@ public class Main {
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     if (!started[0]) return;
-                    if (!overlayPanel.isVisible() && !paused[0] && correctButton.isEnabled()) {
+                    if (!overlayPanel.isVisible() && !paused[0] && !preRoundCounting[0] && correctButton.isEnabled()) {
                         correctButton.doClick();
                     }
                 }
@@ -1487,7 +1591,7 @@ public class Main {
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     if (!started[0]) return;
-                    if (!overlayPanel.isVisible() && !paused[0] && tabooButton.isEnabled()) {
+                    if (!overlayPanel.isVisible() && !paused[0] && !preRoundCounting[0] && tabooButton.isEnabled()) {
                         tabooButton.doClick();
                     }
                 }
@@ -1501,6 +1605,7 @@ public class Main {
                 public void actionPerformed(ActionEvent e) {
                     if (overlayPanel.isVisible() || (gameEndOverlay.isVisible() && tieDecisionPending[0])) return;
                     if (!started[0]) return;
+                    if (preRoundCounting[0]) return;
 
                     if (!paused[0]) {
                         paused[0] = true;
@@ -1531,6 +1636,7 @@ public class Main {
                 public void actionPerformed(ActionEvent e) {
                     // Tur bitti ekranındayken ENTER zaten overlayPanel tarafından yönetiliyor
                     if (overlayPanel.isVisible()) return;
+                    if (preRoundCounting[0]) return;
 
                     // Pause modundaysa ENTER ile devam
                     if (paused[0]) {
@@ -1766,6 +1872,15 @@ public class Main {
         String word;
         String[] taboo;
         WordCard(String w, String[] t) { word = w; taboo = t; }
+    }
+
+    static class ShownCard {
+        int index;
+        String[] shownTaboos;
+        ShownCard(int index, String[] shownTaboos) {
+            this.index = index;
+            this.shownTaboos = shownTaboos;
+        }
     }
 
     // CARD ANIMATION: Fade-out -> swap text -> fade-in
