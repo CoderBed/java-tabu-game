@@ -187,7 +187,7 @@ public class Main {
             centerPanel.setLayout(new OverlayLayout(centerPanel)); // tek yerde set
 
             // Kart paneli: yuvarlak köşe + hafif gölge
-            JPanel cardPanel = new RoundedShadowPanel(26, 14);
+            JPanel cardPanel = new RoundedShadowPanel(26, 22); // daha yumuşak ve daha aşağı gölge
             cardPanel.setPreferredSize(new Dimension(720, 360));
             cardPanel.setLayout(new BoxLayout(cardPanel, BoxLayout.Y_AXIS));
             cardPanel.setBackground(Color.WHITE);
@@ -197,19 +197,48 @@ public class Main {
             wordLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
             wordLabel.setForeground(new Color(25, 25, 25));
 
-            JLabel tabooList = new JLabel("", SwingConstants.CENTER); // kutular ortalansın
+            // (Geriye dönük uyumluluk) Eski tabooList referansları derlensin diye gizli label
+            JLabel tabooList = new JLabel("", SwingConstants.CENTER);
             tabooList.setFont(new Font("Arial", Font.PLAIN, 22));
             tabooList.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-            // kart içi padding (kutular geniş görünsün)
-            tabooList.setBorder(BorderFactory.createEmptyBorder(0, 40, 0, 40));
-            tabooList.setForeground(new Color(55, 55, 55));
+            tabooList.setVisible(false); // UI'da gösterilmiyor, kutular kullanılıyor
 
             cardPanel.add(Box.createVerticalStrut(26));
             cardPanel.add(wordLabel);
             cardPanel.add(Box.createVerticalStrut(14));
-            cardPanel.add(tabooList);
-            cardPanel.add(Box.createVerticalStrut(10));
+
+            // === TABU KUTULARI PANELİ ===
+            JPanel tabooBoxesPanel = new JPanel();
+            tabooBoxesPanel.setOpaque(false);
+            tabooBoxesPanel.setLayout(new BoxLayout(tabooBoxesPanel, BoxLayout.Y_AXIS));
+            tabooBoxesPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            JLabel[] tabooBoxLabels = new JLabel[5];
+
+            for (int i = 0; i < tabooBoxLabels.length; i++) {
+                JLabel lbl = new JLabel("", SwingConstants.LEFT);
+                lbl.setFont(new Font("Arial", Font.PLAIN, 22));
+                lbl.setOpaque(true);
+                lbl.setBackground(Color.WHITE);
+                lbl.setForeground(new Color(40, 40, 40));
+
+                lbl.setBorder(BorderFactory.createCompoundBorder(
+                        new LineBorder(new Color(220, 220, 220), 1, true),
+                        new EmptyBorder(10, 18, 10, 18)
+                ));
+
+                lbl.setMaximumSize(new Dimension(600, 56));
+                lbl.setPreferredSize(new Dimension(600, 56));
+                lbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+                tabooBoxLabels[i] = lbl;
+
+                if (i > 0) tabooBoxesPanel.add(Box.createVerticalStrut(12));
+                tabooBoxesPanel.add(lbl);
+            }
+
+            cardPanel.add(tabooBoxesPanel);
+            cardPanel.add(Box.createVerticalStrut(26));
 
             // TUR BİTTİ OVERLAY (geri sayım + DEVAM)
             JPanel overlayPanel = new JPanel(new GridBagLayout());
@@ -400,6 +429,35 @@ public class Main {
             final Color DARK_WORD_FG     = Color.WHITE;
             final Color DARK_TABOO_FG    = new Color(200, 200, 200);
 
+            // Tema: Tabu kutuları light/dark uyumlu hale getir
+            Runnable applyTabooBoxesTheme = () -> {
+                if (!darkMode[0]) {
+                    Color bg = new Color(250, 250, 250);
+                    Color fg = new Color(40, 40, 40);
+                    Color border = new Color(220, 220, 220);
+                    for (JLabel lbl : tabooBoxLabels) {
+                        lbl.setBackground(bg);
+                        lbl.setForeground(fg);
+                        lbl.setBorder(BorderFactory.createCompoundBorder(
+                                new LineBorder(border, 1, true),
+                                new EmptyBorder(10, 18, 10, 18)
+                        ));
+                    }
+                } else {
+                    Color bg = new Color(55, 55, 55);
+                    Color fg = new Color(230, 230, 230);
+                    Color border = new Color(85, 85, 85);
+                    for (JLabel lbl : tabooBoxLabels) {
+                        lbl.setBackground(bg);
+                        lbl.setForeground(fg);
+                        lbl.setBorder(BorderFactory.createCompoundBorder(
+                                new LineBorder(border, 1, true),
+                                new EmptyBorder(10, 18, 10, 18)
+                        ));
+                    }
+                }
+            };
+
             // Süre etiketi için tema-dostu normal renk (applyTheme içinde de kullanılıyor)
             Runnable setTimeLabelNormalColor = () -> {
                 timeLabel.setForeground(darkMode[0] ? Color.WHITE : normalTimeColor);
@@ -496,7 +554,7 @@ public class Main {
                     }
 
                     timeLabel.setFont(new Font("Arial", Font.BOLD, 19));
-                    cardPanel.setPreferredSize(new Dimension(700, 330));
+                    cardPanel.setPreferredSize(new Dimension(760, 420));
 
             // tema/text renklerini tekrar uygula
             if (applyTheme[0] != null) applyTheme[0].run();
@@ -538,11 +596,14 @@ public class Main {
                     // Badge kontrastını güncelle
                     applyTeamBadgeStyles.run();
                     if (updateTeamColors[0] != null) updateTeamColors[0].run();
+                    applyTabooBoxesTheme.run();
                 } else {
                     // DARK MODE
                     frame.getContentPane().setBackground(DARK_FRAME_BG);
                     topPanel.setBackground(DARK_PANEL_BG);
                     bottomPanel.setBackground(DARK_PANEL_BG);
+                    bottomRow1.setBackground(bottomPanel.getBackground());
+                    bottomRow2.setBackground(bottomPanel.getBackground());
                     centerPanel.setBackground(DARK_CENTER_BG);
                     cardPanel.setBackground(DARK_CARD_BG);
                     wordLabel.setForeground(DARK_WORD_FG);
@@ -567,6 +628,7 @@ public class Main {
                     // Badge kontrastını güncelle
                     applyTeamBadgeStyles.run();
                     if (updateTeamColors[0] != null) updateTeamColors[0].run();
+                    applyTabooBoxesTheme.run();
                 }
             };
 
@@ -860,6 +922,16 @@ public class Main {
                 // Kart değişimini animasyonla yap
                 animateCardSwap(wordLabel, tabooList, () -> {
                     wordLabel.setText(c.word);
+
+                    // kutulara bas
+                    for (int i = 0; i < tabooBoxLabels.length; i++) {
+                        String t = (shownTaboos != null && i < shownTaboos.length && shownTaboos[i] != null)
+                                ? shownTaboos[i].trim()
+                                : "";
+                        tabooBoxLabels[i].setText(t);
+                    }
+
+                    // (gizli label) eski akışlar için de güncelle
                     tabooList.setText(toTabooBoxesHtml(shownTaboos));
                 });
 
@@ -886,6 +958,21 @@ public class Main {
                         "↓ = TABU",
                         "ESC = DURAKLAT"
                 }));
+
+                for (int i = 0; i < tabooBoxLabels.length; i++) tabooBoxLabels[i].setText("");
+
+                String[] readyLines = {
+                        "Ayarları üstten yap",
+                        "BAŞLAT'a bas",
+                        "SPACE = PAS",
+                        "↑ = DOĞRU",
+                        "↓ = TABU"
+                };
+
+                for (int i = 0; i < tabooBoxLabels.length; i++) {
+                    tabooBoxLabels[i].setText(i < readyLines.length ? readyLines[i] : "");
+                }
+
                 tabooList.setForeground(new Color(55, 55, 55));
             };
 
@@ -1279,6 +1366,7 @@ public class Main {
 
                 // kart gizle, overlay aç
                 cardPanel.setVisible(false);
+                for (JLabel lbl : tabooBoxLabels) lbl.setText("");
                 readyOverlay.setVisible(true);
 
                 readyCount[0] = 3;
@@ -1420,6 +1508,7 @@ public class Main {
 
                     // Oyun bitti ekranında kartı gizle (üst üste binmesin)
                     cardPanel.setVisible(false);
+                    for (JLabel lbl : tabooBoxLabels) lbl.setText("");
                     wordLabel.setText("");
                     tabooList.setText("");
 
@@ -1520,6 +1609,7 @@ public class Main {
                     readyOverlay.setVisible(false);
                     // Tur bitti ekranında kart görünmesin
                     cardPanel.setVisible(false);
+                    for (JLabel lbl : tabooBoxLabels) lbl.setText("");
 
                     // Mini tur özeti (overlay içinde)
                     int teamEndScore = team[0].equals("A") ? scoreA[0] : scoreB[0];
@@ -1675,6 +1765,14 @@ public class Main {
 
                     animateCardSwap(wordLabel, tabooList, () -> {
                         wordLabel.setText(prev.word);
+
+                        for (int i = 0; i < tabooBoxLabels.length; i++) {
+                            String t = (prevShown.shownTaboos != null && i < prevShown.shownTaboos.length && prevShown.shownTaboos[i] != null)
+                                    ? prevShown.shownTaboos[i].trim()
+                                    : "";
+                            tabooBoxLabels[i].setText(t);
+                        }
+
                         tabooList.setText(toTabooBoxesHtml(prevShown.shownTaboos));
                     });
                 }
