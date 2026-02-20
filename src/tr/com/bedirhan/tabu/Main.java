@@ -184,11 +184,11 @@ public class Main {
             // =========================
             JPanel centerPanel = new JPanel();
             centerPanel.setBackground(Color.WHITE);
-            centerPanel.setLayout(new OverlayLayout(centerPanel)); // ✅ tek yerde set
+            centerPanel.setLayout(new OverlayLayout(centerPanel)); // tek yerde set
 
             // Kart paneli: yuvarlak köşe + hafif gölge
             JPanel cardPanel = new RoundedShadowPanel(26, 14);
-            cardPanel.setPreferredSize(new Dimension(700, 330));
+            cardPanel.setPreferredSize(new Dimension(720, 360));
             cardPanel.setLayout(new BoxLayout(cardPanel, BoxLayout.Y_AXIS));
             cardPanel.setBackground(Color.WHITE);
 
@@ -197,15 +197,19 @@ public class Main {
             wordLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
             wordLabel.setForeground(new Color(25, 25, 25));
 
-            JLabel tabooList = new JLabel("", SwingConstants.CENTER);
+            JLabel tabooList = new JLabel("", SwingConstants.CENTER); // kutular ortalansın
             tabooList.setFont(new Font("Arial", Font.PLAIN, 22));
             tabooList.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            // kart içi padding (kutular geniş görünsün)
+            tabooList.setBorder(BorderFactory.createEmptyBorder(0, 40, 0, 40));
             tabooList.setForeground(new Color(55, 55, 55));
 
-            cardPanel.add(Box.createVerticalStrut(30));
+            cardPanel.add(Box.createVerticalStrut(26));
             cardPanel.add(wordLabel);
-            cardPanel.add(Box.createVerticalStrut(20));
+            cardPanel.add(Box.createVerticalStrut(14));
             cardPanel.add(tabooList);
+            cardPanel.add(Box.createVerticalStrut(10));
 
             // TUR BİTTİ OVERLAY (geri sayım + DEVAM)
             JPanel overlayPanel = new JPanel(new GridBagLayout());
@@ -856,7 +860,7 @@ public class Main {
                 // Kart değişimini animasyonla yap
                 animateCardSwap(wordLabel, tabooList, () -> {
                     wordLabel.setText(c.word);
-                    tabooList.setText(toHtml(shownTaboos));
+                    tabooList.setText(toTabooBoxesHtml(shownTaboos));
                 });
 
                 drawsThisRound[0]++;
@@ -1671,7 +1675,7 @@ public class Main {
 
                     animateCardSwap(wordLabel, tabooList, () -> {
                         wordLabel.setText(prev.word);
-                        tabooList.setText(toHtml(prevShown.shownTaboos));
+                        tabooList.setText(toTabooBoxesHtml(prevShown.shownTaboos));
                     });
                 }
 
@@ -2035,8 +2039,79 @@ public class Main {
 
     static String toHtml(String[] t) {
         StringBuilder sb = new StringBuilder("<html>");
-        for (String s : t) sb.append("- ").append(s).append("<br>");
+        for (String s : t) sb.append(s).append("<br>");
         return sb.append("</html>").toString();
+    }
+
+    // Tabu kelimelerini kart gibi göstermek için özel HTML
+    // Tireleri kaldırır, satır aralarını açar
+    static String toHtmlTaboos(String[] taboos) {
+        if (taboos == null) return "";
+
+        StringBuilder sb = new StringBuilder("<html><div style='text-align:left;'>");
+        for (String t : taboos) {
+            String s = (t == null) ? "" : t.trim();
+
+            // HTML kaçış
+            s = s.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;");
+
+            // Başta '-' varsa kaldır
+            if (s.startsWith("-")) s = s.substring(1).trim();
+
+            if (s.isEmpty()) sb.append("<br>");
+            else sb.append(s).append("<br><br>");
+        }
+        sb.append("</div></html>");
+        return sb.toString();
+    }
+
+    // Tabu kelimelerini kutucuk/kart görünümünde bas (tire yok) - Swing HTML uyumlu
+    static String toTabooBoxesHtml(String[] lines) {
+        if (lines == null || lines.length == 0) return "";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html>")
+                .append("<div style='text-align:center; padding-top:6px;'>");
+
+        for (String raw : lines) {
+            if (raw == null) continue;
+            String s = raw.trim();
+            if (s.isEmpty()) continue;
+
+            // CSV'de "- kelime" gibi geldiyse tireyi temizle
+            if (s.startsWith("-")) s = s.substring(1).trim();
+
+            // HTML güvenliği
+            s = escapeHtml(s);
+
+            sb.append("<div style='")
+                    .append("display:inline-block;")
+                    .append("width:520px;")          // <<< kutu genişliği (istersen 420/600 yap)
+                    .append("padding:14px 18px;")
+                    .append("margin:10px 0;")
+                    .append("border:1px solid #d8d8d8;")
+                    .append("background:#ffffff;")
+                    .append("text-align:left;")
+                    .append("font-size:22px;")
+                    .append("color:#333333;")
+                    .append("box-sizing:border-box;")
+                    .append("'>")
+                    .append(s)
+                    .append("</div>");
+        }
+
+        sb.append("</div></html>");
+        return sb.toString();
+    }
+
+    static String escapeHtml(String s) {
+        return s
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     // Tabu kelimeleri (ana kelimeyi etkilemeden) her gösterimde karıştırmak için
