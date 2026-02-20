@@ -26,6 +26,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.HashMap;
 
 public class Main {
 
@@ -406,9 +408,18 @@ public class Main {
             bottomRow1.setOpaque(true);
             bottomRow1.setBackground(Color.LIGHT_GRAY);
 
-            JPanel bottomRow2 = new JPanel(new FlowLayout(FlowLayout.CENTER, 18, 10));
+            JPanel bottomRow2 = new JPanel(new BorderLayout());
             bottomRow2.setOpaque(true);
             bottomRow2.setBackground(Color.LIGHT_GRAY);
+            bottomRow2.setBorder(new EmptyBorder(0, 18, 0, 18));
+            bottomRow2.setOpaque(true);
+            bottomRow2.setBackground(Color.LIGHT_GRAY);
+            JPanel bottomRow2Center = new JPanel(new FlowLayout(FlowLayout.CENTER, 18, 10));
+            bottomRow2Center.setOpaque(true);
+            bottomRow2Center.setBackground(Color.LIGHT_GRAY);
+            JPanel bottomRow2Left = new JPanel(new FlowLayout(FlowLayout.LEFT, 18, 10));
+            bottomRow2Left.setOpaque(true);
+            bottomRow2Left.setBackground(Color.LIGHT_GRAY);
 
             bottomPanel.add(bottomRow1);
             bottomPanel.add(bottomRow2);
@@ -570,6 +581,8 @@ public class Main {
                     frame.getContentPane().setBackground(LIGHT_FRAME_BG);
                     topPanel.setBackground(LIGHT_PANEL_BG);
                     bottomPanel.setBackground(LIGHT_PANEL_BG);
+                    bottomRow2Center.setBackground(LIGHT_PANEL_BG);
+                    bottomRow2Left.setBackground(LIGHT_PANEL_BG);
                     bottomRow1.setBackground(bottomPanel.getBackground());
                     bottomRow2.setBackground(bottomPanel.getBackground());
                     centerPanel.setBackground(LIGHT_CENTER_BG);
@@ -602,6 +615,8 @@ public class Main {
                     frame.getContentPane().setBackground(DARK_FRAME_BG);
                     topPanel.setBackground(DARK_PANEL_BG);
                     bottomPanel.setBackground(DARK_PANEL_BG);
+                    bottomRow2Center.setBackground(DARK_PANEL_BG);
+                    bottomRow2Left.setBackground(DARK_PANEL_BG);
                     bottomRow1.setBackground(bottomPanel.getBackground());
                     bottomRow2.setBackground(bottomPanel.getBackground());
                     centerPanel.setBackground(DARK_CENTER_BG);
@@ -707,7 +722,13 @@ public class Main {
             // Yeni: Pause'dan devam etmek için altta buton
             JButton resumeBottomButton = new JButton("DEVAM ET");
             resumeBottomButton.setVisible(false); // başlangıçta gizli
-            JButton presentationButton = new JButton("⛶ SUNUM");
+            JButton presentationButton = new JButton();
+            presentationButton.setText("");
+            presentationButton.setIcon(new FullscreenIcon(18, Color.WHITE));
+            presentationButton.setFont(new Font("Arial", Font.BOLD, 18));
+            presentationButton.setPreferredSize(new Dimension(54, 45)); // sağ alt küçük
+            presentationButton.setMargin(new Insets(0, 0, 0, 0));
+            presentationButton.setToolTipText("Sunum Modu (F11)");
             JButton historyButton = new JButton("📜 GEÇMİŞ");
 
             // Buton renkleri + hover + disabled soluk görünüm
@@ -720,11 +741,18 @@ public class Main {
             styleColoredButton(undoButton, new Color(96, 125, 139), Color.WHITE);      // Mavi-gri
             styleColoredButton(historyButton, new Color(121, 85, 72), Color.WHITE); // Kahverengi
 
-            for (JButton b : new JButton[]{correctButton, passButton, tabooButton, undoButton, historyButton, newGameButton, presentationButton, resumeBottomButton}) {
+            for (JButton b : new JButton[]{correctButton, passButton, tabooButton, undoButton, historyButton, newGameButton, resumeBottomButton}) {
                 b.setFont(btnFont);
                 b.setPreferredSize(new Dimension(140, 45));
                 b.setFocusable(false);
             }
+
+            // Sunum butonu sağ altta küçük kalsın
+            presentationButton.setFocusable(false);
+            presentationButton.setPreferredSize(new Dimension(46, 44));
+            presentationButton.setMargin(new Insets(0, 0, 0, 0));
+            presentationButton.setFocusPainted(false);
+            presentationButton.setBorderPainted(false);
 
             correctButton.setToolTipText("Kısayol: ↑");
             passButton.setToolTipText("Kısayol: SPACE");
@@ -733,6 +761,7 @@ public class Main {
             resumeBottomButton.setToolTipText("Devam Et (ESC / ENTER)");
             undoButton.setToolTipText("Son Hamleyi Geri Al ");
             historyButton.setToolTipText("Son 5 oyun kaydı");
+            presentationButton.setToolTipText("Sunum Modu (F11)");
 
             // 1. satır: oyun aksiyonları
             bottomRow1.add(correctButton);
@@ -742,11 +771,17 @@ public class Main {
             bottomRow1.add(newGameButton);
             bottomRow1.add(startButton); // BAŞLAT
 
+            // 2. satır içerikleri: sol / orta / sağ
+            bottomRow2Left.add(historyButton);
+            bottomRow2Center.add(darkModeToggle);
+            bottomRow2Center.add(resumeBottomButton);
+
             // 2. satır: yardımcı butonlar
-            bottomRow2.add(historyButton);
-            bottomRow2.add(presentationButton);
-            bottomRow2.add(darkModeToggle);     // 🌙 Dark / ☀️ Light
-            bottomRow2.add(resumeBottomButton); // DEVAM ET
+            bottomRow2.add(bottomRow2Left, BorderLayout.WEST);
+            bottomRow2.add(bottomRow2Center, BorderLayout.CENTER);
+            bottomRow2.add(presentationButton, BorderLayout.EAST);
+            // Alt satırın en dibe yapışmasını engelle: altta panel renginde boşluk bırak
+            bottomRow2.setBorder(BorderFactory.createEmptyBorder(0, 12, 6, 12));
 
             // Focus sorunları
             durationBox.setFocusable(false);
@@ -848,6 +883,8 @@ public class Main {
             Deque<Integer> recentHistory = new ArrayDeque<>();
             // Geri al için kart geçmişi (son gösterilen kartlar + o an ekranda görünen tabu sırası)
             Deque<ShownCard> cardHistory = new ArrayDeque<>();
+            // Aynı kart tekrar geldiğinde tabu sırası art arda aynı gelmesin diye (kart bazlı) son sıra hafızası
+            Map<Integer, String> lastTabooOrderByCard = new HashMap<>();
 
             // Aynı tur içinde aynı kart tekrar etmesin
             Set<Integer> roundUsed = new HashSet<>();
@@ -916,7 +953,7 @@ public class Main {
                 WordCard c = cards.get(chosenIndex);
 
                 // Bu kart için tabu sırasını bir kez üret ve hem ekrana bas hem de UNDO için sakla
-                String[] shownTaboos = shuffledCopy(c.taboo);
+                String[] shownTaboos = shuffledTaboosAvoidRepeat(c.taboo, chosenIndex, lastTabooOrderByCard);
                 cardHistory.addLast(new ShownCard(chosenIndex, shownTaboos));
 
                 // Kart değişimini animasyonla yap
@@ -1100,6 +1137,7 @@ public class Main {
                 prevRoundShown.clear();
                 drawsThisRound[0] = 0;
                 cardHistory.clear();
+                lastTabooOrderByCard.clear();
 
                 overlayPanel.setVisible(false);
                 resumeBottomButton.setVisible(false);
@@ -1208,6 +1246,7 @@ public class Main {
                 prevRoundShown.clear();
                 drawsThisRound[0] = 0;
                 cardHistory.clear();
+                lastTabooOrderByCard.clear();
 
                 shuffleDeck.run();
                 showNextCard.run();
@@ -1591,9 +1630,23 @@ public class Main {
                     setTimeLabelNormalColor.run();
                 }
 
-                // Son 5 saniye: kart her saniye hafif parlasın (5-4-3-2-1)
-                if (timeLeft[0] <= 5 && timeLeft[0] > 0 && cardPanel.isVisible()) {
-                    pulseCard(cardPanel, cardPanel.getBackground());
+                // Son 10 saniye: kart parlasın (sadece oyun aktifken)
+                if (started[0]
+                        && !overlayPanel.isVisible()
+                        && !gameEndOverlay.isVisible()
+                        && !preRoundCounting[0]
+                        && timeLeft[0] <= 10
+                        && timeLeft[0] > 0
+                        && cardPanel.isVisible()) {
+
+                    // Son 3 saniye daha hızlı
+                    if (timeLeft[0] <= 3) {
+                        pulseCard(cardPanel, cardPanel.getBackground(), 100);
+                    }
+                    // 10–4 arası daha yavaş
+                    else {
+                        pulseCard(cardPanel, cardPanel.getBackground(), 220);
+                    }
                 }
 
                 // Son 3 saniye: bip sesi
@@ -1758,27 +1811,33 @@ public class Main {
                     default -> { return; }
                 }
 
-                // 🔙 Kartı da bir öncekiye geri al (animasyonla) ve tabu sırası aynı kalsın
-                // showNextCard her gösterimde geçmişe (kart + tabu sırası) ekliyor.
+                // 🔙 Kartı da bir öncekiye geri al (animasyonla)
+                // NOT: Undo ile geri dönünce tabu sırası da yeniden karışsın.
                 if (cardHistory.size() >= 2) {
                     // Şu an ekranda olan kartı çıkar
                     cardHistory.removeLast();
 
-                    // Bir önceki kartı ekrana bas
+                    // Bir önceki kart
                     ShownCard prevShown = cardHistory.getLast();
                     WordCard prev = cards.get(prevShown.index);
+
+                    // Tabuları yeniden karıştır (aynı karta art arda aynı sıra gelmesin)
+                    String[] reshuffled = shuffledTaboosAvoidRepeat(prev.taboo, prevShown.index, lastTabooOrderByCard);
+
+                    // History'deki son kaydı da yeni sıra ile güncelle (ileride tekrar kullanılırsa tutarlı olsun)
+                    prevShown.shownTaboos = reshuffled;
 
                     animateCardSwap(wordLabel, tabooList, () -> {
                         wordLabel.setText(prev.word);
 
                         for (int i = 0; i < tabooBoxLabels.length; i++) {
-                            String t = (prevShown.shownTaboos != null && i < prevShown.shownTaboos.length && prevShown.shownTaboos[i] != null)
-                                    ? prevShown.shownTaboos[i].trim()
+                            String t = (reshuffled != null && i < reshuffled.length && reshuffled[i] != null)
+                                    ? reshuffled[i].trim()
                                     : "";
                             tabooBoxLabels[i].setText(t);
                         }
 
-                        tabooList.setText(toTabooBoxesHtml(prevShown.shownTaboos));
+                        tabooList.setText(toTabooBoxesHtml(reshuffled));
                     });
                 }
 
@@ -1803,6 +1862,7 @@ public class Main {
                 canUndo[0] = false;
                 undoButton.setEnabled(false);
                 cardHistory.clear();
+                lastTabooOrderByCard.clear();
 
                 started[0] = false;
 
@@ -1985,6 +2045,8 @@ public class Main {
 
             frame.add(topPanel, BorderLayout.NORTH);
             frame.add(centerPanel, BorderLayout.CENTER);
+            // Alt panelin altına boşluk ekle
+            bottomPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
             frame.add(bottomPanel, BorderLayout.SOUTH);
 
             refreshScores.run();
@@ -2191,7 +2253,7 @@ public class Main {
 
             sb.append("<div style='")
                     .append("display:inline-block;")
-                    .append("width:520px;")          // <<< kutu genişliği (istersen 420/600 yap)
+                    .append("width:380px;")          // <<< kutu genişliği (istersen 420/600 yap)
                     .append("padding:14px 18px;")
                     .append("margin:10px 0;")
                     .append("border:1px solid #d8d8d8;")
@@ -2226,6 +2288,53 @@ public class Main {
         return list.toArray(new String[0]);
     }
 
+    // Aynı karta tekrar gelindiğinde tabu sırası art arda aynı gelmesin diye:
+    // - shuffle yapar
+    // - aynı kart için bir önceki sırayla birebir aynıysa tekrar dener (max 10 deneme)
+    static String[] shuffledTaboosAvoidRepeat(String[] arr, int cardIndex, Map<Integer, String> lastOrderByCard) {
+        if (arr == null) return new String[0];
+
+        // Orijinali bozmayalım
+        String[] out = new String[arr.length];
+        System.arraycopy(arr, 0, out, 0, arr.length);
+
+        // 0-1 elemanda shuffle anlamlı değil
+        if (out.length <= 1) return out;
+
+        String lastSig = lastOrderByCard.get(cardIndex);
+
+        for (int attempt = 0; attempt < 10; attempt++) {
+
+            // Fisher-Yates shuffle (kontrollü)
+            for (int i = out.length - 1; i > 0; i--) {
+                int j = (int) (Math.random() * (i + 1));
+                String tmp = out[i];
+                out[i] = out[j];
+                out[j] = tmp;
+            }
+
+            String sig = String.join("\u001F", out);
+
+            // İlk kezse ya da farklıysa kabul
+            if (lastSig == null || !sig.equals(lastSig)) {
+                lastOrderByCard.put(cardIndex, sig);
+                return out;
+            }
+
+            // Aynı geldiyse tekrar denemek için tekrar orijinal sıraya çek
+            System.arraycopy(arr, 0, out, 0, arr.length);
+        }
+
+        // Çok nadiren burada kalır: en azından ilk ikiyi değiştir
+        if (out.length >= 2) {
+            String tmp = out[0];
+            out[0] = out[1];
+            out[1] = tmp;
+        }
+        lastOrderByCard.put(cardIndex, String.join("\u001F", out));
+        return out;
+    }
+
     // CUSTOM PANEL: Rounded corners + shadow
 
     static class RoundedShadowPanel extends JPanel {
@@ -2248,26 +2357,55 @@ public class Main {
                 int w = getWidth();
                 int h = getHeight();
 
+                // Shadow + background tuning
+                final int shadowOffsetY = 10; // increase to push the “shadow seam/line” lower
+
                 // Shadow (bottom-right)
                 for (int i = shadowSize; i >= 1; i--) {
-                    float alpha = 0.06f * (i / (float) shadowSize);
+                    float alpha = 0.08f * (i / (float) shadowSize);
                     g2.setColor(new Color(0, 0, 0, Math.min(255, Math.max(0, Math.round(alpha * 255)))));
                     Shape shadow = new RoundRectangle2D.Float(
-                            i, i,
+                            i, i + shadowOffsetY,
                             w - (2f * i), h - (2f * i),
                             radius, radius
                     );
                     g2.fill(shadow);
                 }
 
-                // Main rounded background
+                // Main rounded background (extend a bit into the shadow area to avoid a visible seam)
+                int bgW = Math.max(1, w - shadowSize);
+                int bgH = Math.max(1, h - shadowSize + shadowOffsetY);
+                if (bgH > h) bgH = h; // don’t exceed panel height
+
                 Shape round = new RoundRectangle2D.Float(
                         0, 0,
-                        w - shadowSize, h - shadowSize,
+                        bgW, bgH,
                         radius, radius
                 );
                 g2.setColor(getBackground());
                 g2.fill(round);
+
+                // Glow effect (used by last-seconds pulse) - does not change layout
+                Object gaObj = getClientProperty("glowAlpha");
+                if (gaObj == null) gaObj = 0f;
+                float ga = 0f;
+                if (gaObj instanceof Number n) ga = n.floatValue();
+                if (ga > 0f) {
+                    ga = Math.max(0f, Math.min(1f, ga));
+                    Color base = getBackground();
+                    Color glow = lighten(base, 0.55f);
+                    int alpha = Math.max(0, Math.min(255, Math.round(ga * 180f)));
+                    g2.setColor(new Color(glow.getRed(), glow.getGreen(), glow.getBlue(), alpha));
+                    g2.setStroke(new BasicStroke(3f));
+
+                    Shape glowShape = new RoundRectangle2D.Float(
+                            1f, 1f,
+                            (w - shadowSize) - 2f,
+                            (h - shadowSize) - 2f,
+                            radius, radius
+                    );
+                    g2.draw(glowShape);
+                }
             } finally {
                 g2.dispose();
             }
@@ -2347,29 +2485,94 @@ public class Main {
         }
     }
 
-    static void pulseCard(JPanel cardPanel, Color normalBg) {
-        // Aynı anda iki pulse çalışmasın
-        Object existing = cardPanel.getClientProperty("cardPulseTimer");
-        if (existing instanceof Timer t) {
-            t.stop();
+    // Küçük fullscreen ikonu (harici resim dosyası gerekmez)
+    static class FullscreenIcon implements Icon {
+        private final int size;
+        private final Color color;
+
+        FullscreenIcon(int size, Color color) {
+            this.size = size;
+            this.color = color;
         }
 
-        Color pulseBg = lighten(normalBg, 0.12f); // hafif parlama
+        @Override public int getIconWidth() { return size; }
+        @Override public int getIconHeight() { return size; }
 
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(color);
+                g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+                int pad = 2;
+                int s = size - 1;
+
+                // sol-üst
+                g2.drawLine(x + pad, y + pad + 6, x + pad, y + pad);
+                g2.drawLine(x + pad, y + pad, x + pad + 6, y + pad);
+
+                // sağ-üst
+                g2.drawLine(x + s - pad - 6, y + pad, x + s - pad, y + pad);
+                g2.drawLine(x + s - pad, y + pad, x + s - pad, y + pad + 6);
+
+                // sol-alt
+                g2.drawLine(x + pad, y + s - pad - 6, x + pad, y + s - pad);
+                g2.drawLine(x + pad, y + s - pad, x + pad + 6, y + s - pad);
+
+                // sağ-alt
+                g2.drawLine(x + s - pad - 6, y + s - pad, x + s - pad, y + s - pad);
+                g2.drawLine(x + s - pad, y + s - pad - 6, x + s - pad, y + s - pad);
+            } finally {
+                g2.dispose();
+            }
+        }
+    }
+
+    static void pulseCard(JPanel cardPanel, Color normalBg, int intervalMs) {
+        // Glow çizebilen panel (RoundedShadowPanel) bul
+        JComponent t = cardPanel;
+
+        while (t != null && !(t instanceof RoundedShadowPanel)) {
+            Container p = t.getParent();
+            t = (p instanceof JComponent) ? (JComponent) p : null;
+        }
+
+        // RoundedShadowPanel bulunamazsa yine de cardPanel'i hedefle
+        if (t == null) t = cardPanel;
+
+        // Lambda içinde kullanacağımız hedef: artık efektif final
+        final JComponent target = t;
+
+        // Aynı anda iki pulse çalışmasın
+        Object existing = target.getClientProperty("cardPulseTimer");
+        if (existing instanceof Timer) {
+            ((Timer) existing).stop();
+        }
+
+        final int totalTicks = 10; // 5 kez yanıp sönsün
         final int[] tick = {0};
-        Timer timer = new Timer(140, e -> {
-            boolean on = (tick[0] % 2 == 0);
-            cardPanel.setBackground(on ? pulseBg : normalBg);
 
-            tick[0]++;
-            if (tick[0] >= 6) { // 3 kez yanıp sönsün
-                ((Timer) e.getSource()).stop();
-                cardPanel.putClientProperty("cardPulseTimer", null);
-                cardPanel.setBackground(normalBg);
+        Timer timer = new Timer(intervalMs, new java.awt.event.ActionListener() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                // Daha net görünen blink
+                float ga = (tick[0] % 2 == 0) ? 1.0f : 0.0f;
+                target.putClientProperty("glowAlpha", ga);
+                target.repaint();
+
+                tick[0]++;
+                if (tick[0] >= totalTicks) {
+                    ((Timer) e.getSource()).stop();
+                    target.putClientProperty("cardPulseTimer", null);
+                    target.putClientProperty("glowAlpha", 0f);
+                    target.repaint();
+                }
             }
         });
 
-        cardPanel.putClientProperty("cardPulseTimer", timer);
+        target.putClientProperty("cardPulseTimer", timer);
         timer.setRepeats(true);
         timer.start();
     }
