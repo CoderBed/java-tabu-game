@@ -1591,6 +1591,11 @@ public class Main {
                     setTimeLabelNormalColor.run();
                 }
 
+                // Son 5 saniye: kart her saniye hafif parlasın (5-4-3-2-1)
+                if (timeLeft[0] <= 5 && timeLeft[0] > 0 && cardPanel.isVisible()) {
+                    pulseCard(cardPanel, cardPanel.getBackground());
+                }
+
                 // Son 3 saniye: bip sesi
                 if (timeLeft[0] <= 3 && timeLeft[0] > 0) {
                     Toolkit.getDefaultToolkit().beep();
@@ -2340,6 +2345,33 @@ public class Main {
             this.index = index;
             this.shownTaboos = shownTaboos;
         }
+    }
+
+    static void pulseCard(JPanel cardPanel, Color normalBg) {
+        // Aynı anda iki pulse çalışmasın
+        Object existing = cardPanel.getClientProperty("cardPulseTimer");
+        if (existing instanceof Timer t) {
+            t.stop();
+        }
+
+        Color pulseBg = lighten(normalBg, 0.12f); // hafif parlama
+
+        final int[] tick = {0};
+        Timer timer = new Timer(140, e -> {
+            boolean on = (tick[0] % 2 == 0);
+            cardPanel.setBackground(on ? pulseBg : normalBg);
+
+            tick[0]++;
+            if (tick[0] >= 6) { // 3 kez yanıp sönsün
+                ((Timer) e.getSource()).stop();
+                cardPanel.putClientProperty("cardPulseTimer", null);
+                cardPanel.setBackground(normalBg);
+            }
+        });
+
+        cardPanel.putClientProperty("cardPulseTimer", timer);
+        timer.setRepeats(true);
+        timer.start();
     }
 
     // CARD ANIMATION: Fade-out -> swap text -> fade-in
